@@ -155,20 +155,81 @@ public partial class StockInDialog : UserControl
 
     private void AddProduct(Models.Product product)
     {
-        if (_selectedEntries.Any(e => e.ProductId == product.Id))
+        // لو موجود — اسكرول إليه وأضئه
+        var existing = _selectedEntries.FirstOrDefault(e => e.ProductId == product.Id);
+        if (existing != null)
+        {
+            ScrollToEntry(existing, highlight: true);
             return;
+        }
 
         var units = _db.ProductUnits.Where(u => u.ProductId == product.Id).ToList();
 
-        _selectedEntries.Add(new StockInEntry
+        var entry = new StockInEntry
         {
             ProductId = product.Id,
             ProductName = product.Name,
             HasCarton = units.Any(u => u.UnitType == UnitType.Carton),
-            HasBox = units.Any(u => u.UnitType == UnitType.Box),
-            HasPiece = units.Any(u => u.UnitType == UnitType.Piece)
-        });
+            HasBox    = units.Any(u => u.UnitType == UnitType.Box),
+            HasPiece  = units.Any(u => u.UnitType == UnitType.Piece)
+        };
+        _selectedEntries.Add(entry);
         UpdateSelectedCount();
+
+        // اسكرول للعنصر الجديد بعد render
+        Dispatcher.InvokeAsync(() => ScrollToEntry(entry, highlight: false),
+            System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void ScrollToEntry(StockInEntry entry, bool highlight)
+    {
+        Dispatcher.InvokeAsync(() =>
+        {
+            var container = SelectedItemsList.ItemContainerGenerator
+                .ContainerFromItem(entry) as FrameworkElement;
+            if (container == null) return;
+
+            container.BringIntoView();
+
+            if (!highlight) return;
+
+            var border = FindFirstBorder(container);
+            if (border == null) return;
+
+            var original = border.Background;
+
+            // وميضان متتاليان
+            int step = 0;
+            var timer = new System.Windows.Threading.DispatcherTimer
+                { Interval = TimeSpan.FromMilliseconds(180) };
+            timer.Tick += (_, _) =>
+            {
+                step++;
+                border.Background = step % 2 == 1
+                    ? new SolidColorBrush(Color.FromRgb(0x00, 0xC8, 0x96))   // أخضر فاتح
+                    : original;
+
+                if (step >= 4) // وميضتان
+                {
+                    timer.Stop();
+                    border.Background = original;
+                }
+            };
+            timer.Start();
+        }, System.Windows.Threading.DispatcherPriority.Loaded);
+    }
+
+    private static Border? FindFirstBorder(DependencyObject parent)
+    {
+        int count = VisualTreeHelper.GetChildrenCount(parent);
+        for (int i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is Border b) return b;
+            var found = FindFirstBorder(child);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     private void RemoveEntry_Click(object sender, RoutedEventArgs e)

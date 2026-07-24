@@ -318,7 +318,7 @@
                         </Border>
 
                         <!-- items list -->
-                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="12,8,12,4">
+                        <ScrollViewer x:Name="SelectedItemsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="12,8,12,4">
                             <ItemsControl x:Name="SelectedItemsList">
                                 <ItemsControl.Resources>
                                     <BooleanToVisibilityConverter x:Key="B2V" />
