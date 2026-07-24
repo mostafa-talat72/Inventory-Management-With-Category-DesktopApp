@@ -233,7 +233,7 @@ public class ReceiptPrinter : IDisposable
     //  INVENTORY REPORT PRINTING
     // ═══════════════════════════════════════════
 
-    public string BuildInventoryHtml(List<(Product product, string stockDisplay, int totalPieces, decimal stockValue)> products, AppConfig config)
+    public string BuildInventoryHtml(List<(Product product, string stockDisplay, int totalPieces, decimal stockValue)> products, AppConfig config, string? title = null)
     {
         var locationName = config.PrintLocationName ? config.LocationName : "";
         var now = DateTime.Now;
@@ -342,7 +342,7 @@ public class ReceiptPrinter : IDisposable
   <div class=""header"">
     {(string.IsNullOrWhiteSpace(locationName) ? "" : $"<div class=\"org-name\">{System.Net.WebUtility.HtmlEncode(locationName)}</div>")}
     <div class=""sys-name"">MTE Stock</div>
-    <div class=""title"">كشف المخزون</div>
+    <div class=""title"">{(title != null ? System.Net.WebUtility.HtmlEncode(title) : "كشف المخزون")}</div>
     <div class=""info"">تاريخ الطباعة: {FormatDateArabic(now)}</div>
   </div>
 
@@ -376,15 +376,164 @@ public class ReceiptPrinter : IDisposable
 </html>";
     }
 
-    public void PrintInventory(List<(Product product, string stockDisplay, int totalPieces, decimal stockValue)> products)
+    public void PrintInventory(List<(Product product, string stockDisplay, int totalPieces, decimal stockValue)> products, string? title = null)
     {
         var config = AppConfig.Load();
-        var html = BuildInventoryHtml(products, config);
-        Views.PrintPreviewDialog.ShowInventory(html, "كشف المخزون");
+        var html = BuildInventoryHtml(products, config, title);
+        Views.PrintPreviewDialog.ShowInventory(html, title ?? "كشف المخزون");
+    }
+
+    public void PrintInventoryGrouped(
+        List<(Product product, string stockDisplay, int totalPieces, decimal stockValue)> products,
+        List<Category> categories)
+    {
+        var config = AppConfig.Load();
+        var html = BuildInventoryGroupedHtml(products, categories, config);
+        Views.PrintPreviewDialog.ShowInventory(html, "كشف المخزون - جميع الأقسام");
+    }
+
+    public string BuildInventoryGroupedHtml(
+        List<(Product product, string stockDisplay, int totalPieces, decimal stockValue)> products,
+        List<Category> categories,
+        AppConfig config)
+    {
+        var locationName = config.PrintLocationName ? config.LocationName : "";
+        var now = DateTime.Now;
+
+        // منتجات بدون قسم
+        var noCat = products.Where(p => p.product.CategoryId == null).ToList();
+        // منتجات لكل قسم
+        var grouped = categories
+            .Select(c => new {
+                Category = c,
+                Items = products.Where(p => p.product.CategoryId == c.Id).ToList()
+            })
+            .Where(g => g.Items.Count > 0)
+            .ToList();
+
+        var allSections = new StringBuilder();
+
+        void AppendSection(string sectionTitle, List<(Product product, string stockDisplay, int totalPieces, decimal stockValue)> items)
+        {
+            if (items.Count == 0) return;
+            decimal sectionValue = items.Sum(i => i.stockValue);
+            int outOfStock = items.Count(i => i.totalPieces <= 0);
+
+            allSections.Append($@"
+  <div class=""section-header"">{System.Net.WebUtility.HtmlEncode(sectionTitle)}
+    <span class=""sec-count"">({items.Count} منتج — قيمة: {ToArabicNumerals(sectionValue.ToString("0.##"))} ج.م{(outOfStock > 0 ? $" — نفذ: {outOfStock}" : "")})</span>
+  </div>
+  <table class=""items-table"">
+    <thead><tr>
+      <th class=""num"">#</th><th class=""name"">المنتج</th>
+      <th class=""stock"">المخزون</th><th class=""value"">القيمة</th>
+      <th class=""price"">قطاعي</th><th class=""price"">جملة</th>
+    </tr></thead>
+    <tbody>");
+
+            int rowNum = 1;
+            foreach (var item in items.OrderBy(i => i.product.Name))
+            {
+                var p = item.product;
+                var units = p.Units.OrderBy(u => u.UnitType).ToList();
+                var retailLines    = units.Select(u => $"{u.Name}: {u.RetailPrice:0.##}").ToList();
+                var wholesaleLines = units.Select(u => $"{u.Name}: {u.WholesalePrice:0.##}").ToList();
+                string retailText    = retailLines.Count    > 0 ? string.Join("\n", retailLines)    : "-";
+                string wholesaleText = wholesaleLines.Count > 0 ? string.Join("\n", wholesaleLines) : "-";
+                var rowBg = rowNum % 2 == 0 ? "#f9f9f9" : "#ffffff";
+
+                allSections.Append($@"
+      <tr style=""background:{rowBg};"">
+        <td class=""num"">{rowNum}</td>
+        <td class=""name""><div class=""prod-name"">{System.Net.WebUtility.HtmlEncode(p.Name)}</div></td>
+        <td class=""stock""><span class=""{(item.totalPieces <= 0 ? "zero" : "has-stock")}"">{System.Net.WebUtility.HtmlEncode(item.stockDisplay)}</span></td>
+        <td class=""value"">{ToArabicNumerals(item.stockValue.ToString("0.##"))}</td>
+        <td class=""price"">{System.Net.WebUtility.HtmlEncode(retailText).Replace("\n", "<br/>")}</td>
+        <td class=""price"">{System.Net.WebUtility.HtmlEncode(wholesaleText).Replace("\n", "<br/>")}</td>
+      </tr>");
+                rowNum++;
+            }
+            allSections.Append("</tbody></table>");
+        }
+
+        foreach (var g in grouped)
+            AppendSection(g.Category.Name, g.Items);
+
+        if (noCat.Count > 0)
+            AppendSection("بدون قسم", noCat);
+
+        decimal totalValue  = products.Sum(p => p.stockValue);
+        int totalProducts   = products.Count;
+        int totalOutOfStock = products.Count(p => p.totalPieces <= 0);
+        var locationInfoHtml = BuildLocationInfoHtml(config);
+
+        return $@"<!DOCTYPE html>
+<html dir=""rtl"" lang=""ar"">
+<head>
+  <meta charset=""UTF-8"">
+  <title>كشف المخزون - جميع الأقسام</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap');
+    * {{ font-family: 'Tajawal', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }}
+    body {{ margin: 0; padding: 8px; font-size: 11px; color: #000; direction: rtl; text-align: center; }}
+    .header {{ text-align: center; border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 10px; }}
+    .org-name {{ font-size: 1.4em; font-weight: 900; margin-bottom: 4px; }}
+    .sys-name {{ font-size: 1.0em; font-weight: 700; color: #555; margin-bottom: 2px; }}
+    .title {{ font-size: 1.2em; font-weight: 800; margin-bottom: 4px; }}
+    .info {{ font-size: 0.9em; font-weight: 600; color: #444; margin-bottom: 2px; }}
+    .summary {{ display: flex; justify-content: center; gap: 14px; margin: 8px 0 12px 0; flex-wrap: wrap; }}
+    .summary-box {{ border: 1.5px solid #000; border-radius: 4px; padding: 5px 14px; font-weight: 800; font-size: 0.95em; text-align: center; }}
+    .summary-box.total {{ background: #000; color: #fff; }}
+    .summary-box.instock {{ background: #e8f5e9; }}
+    .summary-box.outstock {{ background: #ffebee; color: #c62828; }}
+    .summary-box.value {{ background: #f3e5f5; color: #7b1fa2; }}
+    .section-header {{ background: #1A237E; color: #fff; font-size: 1.1em; font-weight: 800;
+                       padding: 7px 12px; margin: 14px 0 4px 0; border-radius: 6px; text-align: right; }}
+    .sec-count {{ font-size: 0.82em; font-weight: 600; opacity: 0.85; margin-right: 8px; }}
+    .items-table {{ width: 100%; border-collapse: collapse; margin-bottom: 6px; font-size: 0.85em; border: 2px solid #000; table-layout: fixed; }}
+    .items-table thead {{ background: #e0e0e0; font-weight: 900; }}
+    .items-table th {{ padding: 5px 4px; text-align: center; border: 1.5px solid #000; font-size: 0.9em; }}
+    .items-table td {{ padding: 4px 4px; border: 1px solid #000; font-weight: 600; vertical-align: middle; }}
+    .num {{ width: 4%; text-align: center; font-weight: 700; }}
+    .name {{ width: 30%; text-align: center; }}
+    .stock {{ width: 16%; text-align: center; font-weight: 700; }}
+    .value {{ width: 12%; text-align: center; font-weight: 800; color: #7b1fa2; }}
+    .price {{ width: 19%; text-align: center; font-size: 0.82em; white-space: pre-line; }}
+    .prod-name {{ font-weight: 800; font-size: 1em; text-align: center; }}
+    .has-stock {{ color: #1b5e20; font-weight: 800; }}
+    .zero {{ color: #c62828; font-weight: 800; }}
+    .footer {{ margin-top: 10px; text-align: center; font-size: 1.0em; color: #000; border-top: 2px dashed #000; padding: 8px 0; font-weight: 800; }}
+    @media print {{
+      @page {{ size: auto; margin: 0; }}
+      body {{ margin: 0; padding: 4px; }}
+      .section-header {{ background: #1A237E !important; color: #fff !important; }}
+      * {{ -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }}
+    }}
+  </style>
+</head>
+<body>
+  <div class=""header"">
+    {(string.IsNullOrWhiteSpace(locationName) ? "" : $"<div class=\"org-name\">{System.Net.WebUtility.HtmlEncode(locationName)}</div>")}
+    <div class=""sys-name"">MTE Stock</div>
+    <div class=""title"">كشف المخزون — جميع الأقسام</div>
+    <div class=""info"">تاريخ الطباعة: {FormatDateArabic(now)}</div>
+  </div>
+  <div class=""summary"">
+    <div class=""summary-box total"">إجمالي المنتجات: {totalProducts}</div>
+    <div class=""summary-box instock"">متوفر: {totalProducts - totalOutOfStock}</div>
+    <div class=""summary-box outstock"">نفذ: {totalOutOfStock}</div>
+    <div class=""summary-box value"">قيمة المخزون: {ToArabicNumerals(totalValue.ToString("0.##"))} ج.م</div>
+  </div>
+  {allSections}
+  {locationInfoHtml}
+  <div class=""footer"">
+    <strong>تم تصميم وتطوير هذا النظام بواسطة المهندس مصطفى طلعت للحلول البرمجيه - 01116626164</strong>
+  </div>
+</body>
+</html>";
     }
 
     public void Dispose() => _db.Dispose();
-
     public void Print(Invoice invoice)
     {
         _db.Entry(invoice).Reference(i => i.Customer).Load();

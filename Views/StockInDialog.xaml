@@ -3,12 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:wm="clr-namespace:ProductApp.Converters"
              FlowDirection="RightToLeft"
-             MinWidth="900" MaxWidth="1300" MaxHeight="720">
+             MinWidth="900" MaxWidth="1300" MinHeight="500" MaxHeight="720">
     <Border CornerRadius="14" Background="{DynamicResource AppBackground}" Padding="0">
         <Border.Effect>
             <DropShadowEffect BlurRadius="24" ShadowDepth="6" Opacity="0.3" Color="#00695C" />
         </Border.Effect>
-        <Grid>
+        <Grid Height="{Binding RelativeSource={RelativeSource AncestorType=UserControl}, Path=ActualHeight, FallbackValue=680}">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -43,7 +43,7 @@
             </Border>
 
             <!-- ══ Body: 3 columns ══ -->
-            <Grid Grid.Row="1">
+            <Grid Grid.Row="1" ClipToBounds="True">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="200" />
                     <ColumnDefinition Width="*" />
@@ -52,8 +52,9 @@
 
                 <!-- ══ COL 0: الأقسام ══ -->
                 <Border Grid.Column="0" Background="{DynamicResource CardBackground}"
-                        BorderBrush="{DynamicResource BorderBrushLight}" BorderThickness="0,0,1,0">
-                    <Grid>
+                        BorderBrush="{DynamicResource BorderBrushLight}" BorderThickness="0,0,1,0"
+                        VerticalAlignment="Stretch">
+                    <Grid VerticalAlignment="Stretch">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />

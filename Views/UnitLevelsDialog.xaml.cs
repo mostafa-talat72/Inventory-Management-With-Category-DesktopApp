@@ -113,14 +113,36 @@ public partial class UnitLevelsDialog : UserControl
         var mainWindow = (MainWindow)Window.GetWindow(this);
         var dialog = new ProductDialog(_db, _product);
         mainWindow.ShowOverlay(dialog);
+
         dialog.DialogClosed += (s, r) =>
         {
             mainWindow.HideOverlay();
-            if (r == true)
+            if (r == true || r == null)
             {
                 LoadUnits();
                 DialogClosed?.Invoke(this, true);
             }
+        };
+
+        dialog.ProductSwitchRequested += (s, targetProduct) =>
+        {
+            mainWindow.HideOverlay();
+            // افتح نافذة تعديل المنتج الجديد
+            var newDialog = new ProductDialog(_db, targetProduct);
+            mainWindow.ShowOverlay(newDialog);
+            newDialog.DialogClosed += (s2, r2) =>
+            {
+                mainWindow.HideOverlay();
+                if (r2 == true || r2 == null)
+                {
+                    LoadUnits();
+                    DialogClosed?.Invoke(this, true);
+                }
+            };
+            newDialog.ProductSwitchRequested += (s2, p2) =>
+            {
+                // تجاهل التداخل العميق
+            };
         };
     }
 }

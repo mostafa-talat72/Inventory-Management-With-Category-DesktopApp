@@ -368,25 +368,32 @@ public partial class ProductsPage : Page
 
     private void AddProduct_Click(object sender, RoutedEventArgs e)
     {
-        var mainWindow = (MainWindow)Window.GetWindow(this);
-        var dialog = new ProductDialog(_db);
-        mainWindow.ShowOverlay(dialog);
-        dialog.DialogClosed += (s, r) =>
-        {
-            mainWindow.HideOverlay();
-            if (r == true) LoadProducts();
-        };
+        OpenProductDialog(null);
     }
 
     private void OpenEditDialog(Product product)
     {
+        OpenProductDialog(product);
+    }
+
+    private void OpenProductDialog(Product? product)
+    {
         var mainWindow = (MainWindow)Window.GetWindow(this);
         var dialog = new ProductDialog(_db, product);
         mainWindow.ShowOverlay(dialog);
+
         dialog.DialogClosed += (s, r) =>
         {
             mainWindow.HideOverlay();
-            if (r == true) LoadProducts();
+            if (r == true || r == null) LoadProducts();
+        };
+
+        dialog.ProductSwitchRequested += (s, targetProduct) =>
+        {
+            mainWindow.HideOverlay();
+            LoadProducts();
+            // افتح نافذة تعديل المنتج الجديد
+            OpenProductDialog(targetProduct);
         };
     }
 
@@ -420,25 +427,52 @@ public partial class ProductsPage : Page
     private void PrintInventory_Click(object sender, RoutedEventArgs e)
     {
         var inv = new InventoryService(_db);
-        var allProducts = _db.Products
-            .Include(p => p.Units)
-            .OrderBy(p => p.Name)
-            .ToList();
+        var printer = new ReceiptPrinter(_db);
 
         var batchValues = _db.InventoryBatches
             .GroupBy(b => b.ProductId)
             .Select(g => new { ProductId = g.Key, Value = g.Sum(b => (decimal)b.RemainingQuantity * b.CostPricePerPiece) })
             .ToDictionary(x => x.ProductId, x => x.Value);
 
-        var printData = allProducts.Select(p => (
-            product: p,
-            stockDisplay: inv.GetStockDisplay(p),
-            totalPieces:  inv.GetAvailableStock(p),
-            stockValue:   batchValues.GetValueOrDefault(p.Id, 0)
-        )).ToList();
+        if (_selectedCategoryId != null)
+        {
+            // طباعة منتجات القسم المحدد فقط
+            var catIds = GetCategoryAndDescendantIds(_selectedCategoryId.Value);
+            var products = _db.Products
+                .Include(p => p.Units)
+                .Where(p => p.CategoryId != null && catIds.Contains(p.CategoryId.Value))
+                .OrderBy(p => p.Name)
+                .ToList();
 
-        var printer = new ReceiptPrinter(_db);
-        printer.PrintInventory(printData);
+            var printData = products.Select(p => (
+                product: p,
+                stockDisplay: inv.GetStockDisplay(p),
+                totalPieces:  inv.GetAvailableStock(p),
+                stockValue:   batchValues.GetValueOrDefault(p.Id, 0)
+            )).ToList();
+
+            var catName = _db.Categories.Find(_selectedCategoryId.Value)?.Name ?? "القسم";
+            printer.PrintInventory(printData, catName);
+        }
+        else
+        {
+            // طباعة جميع المنتجات مقسّمة حسب الأقسام
+            var allProducts = _db.Products
+                .Include(p => p.Units)
+                .OrderBy(p => p.CategoryId).ThenBy(p => p.Name)
+                .ToList();
+
+            var allCats = _db.Categories.OrderBy(c => c.Name).ToList();
+
+            var printData = allProducts.Select(p => (
+                product: p,
+                stockDisplay: inv.GetStockDisplay(p),
+                totalPieces:  inv.GetAvailableStock(p),
+                stockValue:   batchValues.GetValueOrDefault(p.Id, 0)
+            )).ToList();
+
+            printer.PrintInventoryGrouped(printData, allCats);
+        }
     }
 
     public class RelayCommand : ICommand
