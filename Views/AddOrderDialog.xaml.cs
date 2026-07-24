@@ -24,6 +24,24 @@ namespace ProductApp.Views
         private Invoice? _invoice;
         private Order? _orderToEdit;
         private readonly Dictionary<int, OrderItemEntry> _entries = new();
+        private int? _selectedCategoryId = null;
+
+        private class CategoryChip : System.ComponentModel.INotifyPropertyChanged
+        {
+            public int Id { get; set; }
+            public string Name { get; set; } = "";
+            public System.Windows.Input.ICommand SelectCommand { get; set; } = null!;
+            private bool _isSelected;
+            public bool IsSelected
+            {
+                get => _isSelected;
+                set { _isSelected = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsSelected))); }
+            }
+            public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+        }
+
+        private System.Collections.ObjectModel.ObservableCollection<CategoryChip> _chips = new();
+        private List<CategoryChip> _allChips = new();
 
         private class OrderItemEntry
         {
@@ -112,6 +130,8 @@ namespace ProductApp.Views
             {
                 InvoiceBadge.Visibility = Visibility.Collapsed;
             }
+            CategoryChips.ItemsSource = _chips;
+            LoadCategories();
             LoadProducts();
         }
 
@@ -120,6 +140,8 @@ namespace ProductApp.Views
             TxtSubtitle.Text = _invoice!.CustomerName ?? "نقدي";
             InvoiceBadge.Visibility = Visibility.Visible;
             TxtInvoiceId.Text = _invoice.Id.ToString();
+            CategoryChips.ItemsSource = _chips;
+            LoadCategories();
             LoadProducts();
         }
 
@@ -143,7 +165,6 @@ namespace ProductApp.Views
                     _db.Entry(item.Product).Collection(p => p.Units).Load();
                 }
 
-                // أضف كل منتج من الطلب للـ entries
                 var productsInOrder = _orderToEdit.Items
                     .Select(i => i.Product)
                     .DistinctBy(p => p.Id)
@@ -152,11 +173,11 @@ namespace ProductApp.Views
                 foreach (var product in productsInOrder)
                     AddProductToOrder(product);
 
-                // عبي الكميات
                 PreFillOrderItems(_orderToEdit);
             }
 
-            // حمّل المنتجات للبحث (search panel لإضافة منتجات جديدة)
+            CategoryChips.ItemsSource = _chips;
+            LoadCategories();
             LoadProducts();
         }
 
@@ -200,11 +221,98 @@ namespace ProductApp.Views
                     .FirstOrDefault();
         }
 
+        private void LoadCategories()
+        {
+            var cats = _db.Categories.OrderBy(c => c.Name).ToList();
+            _chips.Clear();
+            foreach (var cat in cats)
+            {
+                var catCopy = cat;
+                var chip = new CategoryChip
+                {
+                    Id = cat.Id,
+                    Name = cat.Name,
+                    IsSelected = _selectedCategoryId == cat.Id
+                };
+                chip.SelectCommand = new RelayCommand(() =>
+                {
+                    if (_selectedCategoryId == chip.Id)
+                    {
+                        // toggle off
+                        chip.IsSelected = false;
+                        _selectedCategoryId = null;
+                        SetChipAllActive(true);
+                    }
+                    else
+                    {
+                        foreach (var c in _allChips) c.IsSelected = false;
+                        chip.IsSelected = true;
+                        _selectedCategoryId = chip.Id;
+                        SetChipAllActive(false);
+                    }
+                    LoadProducts();
+                });
+                _chips.Add(chip);
+            }
+
+            // حفظ نسخة كاملة للفلترة
+            _allChips = _chips.ToList();
+
+            // تطبيق نص البحث الحالي لو موجود
+            var searchText = TxtCategorySearch?.Text?.Trim();
+            if (!string.IsNullOrEmpty(searchText))
+                FilterCategoryChips(searchText);
+        }
+
+        private void SetChipAllActive(bool active)
+        {
+            if (ChipAll == null) return;
+            ChipAll.Background = active
+                ? (System.Windows.Media.Brush)Application.Current.FindResource("PrimaryBrush")
+                : (System.Windows.Media.Brush)Application.Current.FindResource("CardBackground");
+            var tb = ChipAll.Child as TextBlock;
+            if (tb != null)
+                tb.Foreground = active
+                    ? System.Windows.Media.Brushes.White
+                    : (System.Windows.Media.Brush)Application.Current.FindResource("HeadingTextBrush");
+        }
+
+        private void ChipAll_Click(object sender, MouseButtonEventArgs e)
+        {
+            _selectedCategoryId = null;
+            foreach (var c in _chips) c.IsSelected = false;
+            SetChipAllActive(true);
+            LoadProducts();
+        }
+
+        private void TxtCategorySearch_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            FilterCategoryChips(TxtCategorySearch.Text.Trim());
+        }
+
+        private void FilterCategoryChips(string filter)
+        {
+            _chips.Clear();
+            var source = string.IsNullOrEmpty(filter)
+                ? _allChips
+                : _allChips.Where(c => c.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+            foreach (var c in source)
+                _chips.Add(c);
+        }
+
         private void LoadProducts(string? filter = null)
         {
             var query = _db.Products.Include(p => p.Units).AsQueryable();
+
+            if (_selectedCategoryId != null)
+            {
+                var catIds = GetCategoryAndDescendantIds(_selectedCategoryId.Value);
+                query = query.Where(p => p.CategoryId != null && catIds.Contains(p.CategoryId.Value));
+            }
+
             if (!string.IsNullOrWhiteSpace(filter))
                 query = query.Where(p => p.Name.Contains(filter));
+
             var products = query.OrderBy(p => p.Name).ToList();
 
             var items = products.Select(p =>
@@ -218,6 +326,15 @@ namespace ProductApp.Views
             }).ToList();
 
             ProductCards.ItemsSource = items;
+        }
+
+        private List<int> GetCategoryAndDescendantIds(int catId)
+        {
+            var ids = new List<int> { catId };
+            var children = _db.Categories.Where(c => c.ParentCategoryId == catId).ToList();
+            foreach (var child in children)
+                ids.AddRange(GetCategoryAndDescendantIds(child.Id));
+            return ids;
         }
 
         private void SelectProduct(Product product)
@@ -775,7 +892,6 @@ namespace ProductApp.Views
         {
             LoadProducts(TxtSearch.Text.Trim());
         }
-
         private static int ParseInt(string? text) =>
             text != null && int.TryParse(text, out int v) ? v : 0;
 

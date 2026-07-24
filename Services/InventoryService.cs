@@ -15,7 +15,7 @@ public class InventoryService
 
     public int GetTotalPieces(Product product)
     {
-        var units = _db.ProductUnits.Where(u => u.ProductId == product.Id).ToList();
+        var units = _db.ProductUnits.AsNoTracking().Where(u => u.ProductId == product.Id).ToList();
         var carton = units.FirstOrDefault(u => u.UnitType == UnitType.Carton);
         var box = units.FirstOrDefault(u => u.UnitType == UnitType.Box);
 
@@ -39,7 +39,7 @@ public class InventoryService
 
     public int GetPiecesPerBox(Product product)
     {
-        var units = _db.ProductUnits.Where(u => u.ProductId == product.Id).ToList();
+        var units = _db.ProductUnits.AsNoTracking().Where(u => u.ProductId == product.Id).ToList();
         var box = units.FirstOrDefault(u => u.UnitType == UnitType.Box);
         if (box != null)
             return box.QuantityPerParent;
@@ -53,7 +53,7 @@ public class InventoryService
 
     public int GetBoxesPerCarton(Product product)
     {
-        var units = _db.ProductUnits.Where(u => u.ProductId == product.Id).ToList();
+        var units = _db.ProductUnits.AsNoTracking().Where(u => u.ProductId == product.Id).ToList();
         var carton = units.FirstOrDefault(u => u.UnitType == UnitType.Carton);
         var box = units.FirstOrDefault(u => u.UnitType == UnitType.Box);
         if (carton != null && box != null && box.ParentUnitId == carton.Id)
@@ -108,7 +108,7 @@ public class InventoryService
 
     public string GetStockDisplay(Product product)
     {
-        var units = _db.ProductUnits.Where(u => u.ProductId == product.Id).OrderBy(u => u.UnitType).ToList();
+        var units = _db.ProductUnits.AsNoTracking().Where(u => u.ProductId == product.Id).OrderBy(u => u.UnitType).ToList();
         bool hasCarton = units.Any(u => u.UnitType == UnitType.Carton);
         bool hasBox = units.Any(u => u.UnitType == UnitType.Box);
         bool hasPiece = units.Any(u => u.UnitType == UnitType.Piece);

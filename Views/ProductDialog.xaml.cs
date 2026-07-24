@@ -33,7 +33,23 @@ public partial class ProductDialog : UserControl
             ChkHasBox.IsChecked = true;
         }
 
+        LoadCategories();
+
         _loaded = true;
+    }
+
+    private void LoadCategories()
+    {
+        var cats = _db.Categories.OrderBy(c => c.Name).ToList();
+        cats.Insert(0, new Category { Id = 0, Name = "-- بدون قسم --" });
+        CmbCategory.ItemsSource = cats;
+        CmbCategory.SelectedIndex = 0;
+
+        if (_product?.CategoryId != null)
+        {
+            var idx = cats.FindIndex(c => c.Id == _product.CategoryId);
+            if (idx >= 0) CmbCategory.SelectedIndex = idx;
+        }
     }
 
     private void LoadProductData()
@@ -334,9 +350,9 @@ public partial class ProductDialog : UserControl
         Product product;
         if (_product != null)
         {
-            product = _product;
-            _db.Attach(product);
-            _db.ProductUnits.RemoveRange(_db.ProductUnits.Where(u => u.ProductId == product.Id));
+            product = _db.Products.Find(_product!.Id)!;
+            var oldUnits = _db.ProductUnits.Where(u => u.ProductId == product.Id).ToList();
+            _db.ProductUnits.RemoveRange(oldUnits);
         }
         else
         {
@@ -346,6 +362,8 @@ public partial class ProductDialog : UserControl
 
         product.Name = name;
         product.Description = TxtDescription.Text?.Trim();
+        var selectedCat = CmbCategory.SelectedItem as Category;
+        product.CategoryId = selectedCat?.Id > 0 ? selectedCat.Id : null;
         _db.SaveChanges();
 
         ProductUnit? pieceUnit = null;
@@ -444,3 +462,4 @@ public partial class ProductDialog : UserControl
         DialogClosed?.Invoke(this, false);
     }
 }
+

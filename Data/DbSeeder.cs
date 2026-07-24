@@ -8,39 +8,56 @@ public static class DbSeeder
     {
         if (db.Products.Any()) return;
 
+        // Seed categories
+        var sportsCat = new Category { Name = "?????", Description = "???????? ????????" };
+        var footballCat = new Category { Name = "??? ???" };
+        var tennisCat = new Category { Name = "???" };
+        sportsCat.ChildCategories.Add(footballCat);
+        sportsCat.ChildCategories.Add(tennisCat);
+        var beveragesCat = new Category { Name = "???????", Description = "????????? ???????" };
+
+        db.Categories.AddRange(sportsCat, beveragesCat);
+        db.SaveChanges();
+
+        // Re-fetch with IDs assigned
+        var sports = db.Categories.First(c => c.Name == "?????");
+        var football = db.Categories.First(c => c.Name == "??? ???");
+        var tennis = db.Categories.First(c => c.Name == "???");
+        var beverages = db.Categories.First(c => c.Name == "???????");
+
         db.Customers.AddRange(
-            new Customer { Name = "أحمد محمد", Phone = "01012345678", Address = "القاهرة" },
-            new Customer { Name = "محمد علي", Phone = "01123456789", Address = "الإسكندرية" },
-            new Customer { Name = "عمر حسن", Phone = "01234567890", Address = "الجيزة" },
-            new Customer { Name = "خالد يوسف", Phone = "01556789012", Address = "الدقهلية" }
+            new Customer { Name = "???? ????", Phone = "01012345678", Address = "???????" },
+            new Customer { Name = "???? ???", Phone = "01123456789", Address = "??????????" },
+            new Customer { Name = "??? ???", Phone = "01234567890", Address = "??????" },
+            new Customer { Name = "???? ????", Phone = "01556789012", Address = "????????" }
         );
 
         db.SaveChanges();
 
-        var ball = new Product { Name = "كرة قدم أديداس", Description = "كرة قدم مقاس 5" };
-        var bat = new Product { Name = "مضرب تنس", Description = "مضرب احترافي" };
-        var water = new Product { Name = "مياه معدنية 1.5 لتر", Description = "مياه نقية" };
+        var ball = new Product { Name = "??? ??? ??????", Description = "??? ??? ???? 5", CategoryId = football.Id };
+        var bat = new Product { Name = "???? ???", Description = "???? ???????", CategoryId = tennis.Id };
+        var water = new Product { Name = "???? ?????? 1.5 ???", Description = "???? ????", CategoryId = beverages.Id };
 
         db.Products.AddRange(ball, bat, water);
         db.SaveChanges();
 
-        // كرة قدم: كرتونة → علبة (12 قطعة) → قطعة
+        // ??? ???: ?????? ? ???? (12 ????) ? ????
         db.ProductUnits.AddRange(
-            new ProductUnit { Product = ball, Name = "قطعة", UnitType = UnitType.Piece, RetailPrice = 50, WholesalePrice = 45, IsBaseUnit = true, QuantityPerParent = 1 },
-            new ProductUnit { Product = ball, Name = "علبة (12 كرة)", UnitType = UnitType.Box, RetailPrice = 500, WholesalePrice = 480, QuantityPerParent = 12 },
-            new ProductUnit { Product = ball, Name = "كرتونة (10 علب)", UnitType = UnitType.Carton, RetailPrice = 4500, WholesalePrice = 4200, QuantityPerParent = 10 }
+            new ProductUnit { Product = ball, Name = "????", UnitType = UnitType.Piece, RetailPrice = 50, WholesalePrice = 45, IsBaseUnit = true, QuantityPerParent = 1 },
+            new ProductUnit { Product = ball, Name = "???? (12 ???)", UnitType = UnitType.Box, RetailPrice = 500, WholesalePrice = 480, QuantityPerParent = 12 },
+            new ProductUnit { Product = ball, Name = "?????? (10 ???)", UnitType = UnitType.Carton, RetailPrice = 4500, WholesalePrice = 4200, QuantityPerParent = 10 }
         );
 
-        // مضرب تنس: كرتونة → قطعة مباشرة
+        // ???? ???: ?????? ? ???? ??????
         db.ProductUnits.AddRange(
-            new ProductUnit { Product = bat, Name = "قطعة", UnitType = UnitType.Piece, RetailPrice = 200, WholesalePrice = 180, IsBaseUnit = true, QuantityPerParent = 1 },
-            new ProductUnit { Product = bat, Name = "كرتونة (12 مضرب)", UnitType = UnitType.Carton, RetailPrice = 2000, WholesalePrice = 1900, QuantityPerParent = 12 }
+            new ProductUnit { Product = bat, Name = "????", UnitType = UnitType.Piece, RetailPrice = 200, WholesalePrice = 180, IsBaseUnit = true, QuantityPerParent = 1 },
+            new ProductUnit { Product = bat, Name = "?????? (12 ????)", UnitType = UnitType.Carton, RetailPrice = 2000, WholesalePrice = 1900, QuantityPerParent = 12 }
         );
 
-        // مياه: كرتونة فقط (تباع بالكرتونة)
+        // ????: ?????? ??? (???? ?????????)
         db.ProductUnits.AddRange(
-            new ProductUnit { Product = water, Name = "كرتونة (12 زجاجة)", UnitType = UnitType.Piece, RetailPrice = 60, WholesalePrice = 55, IsBaseUnit = true, QuantityPerParent = 1 },
-            new ProductUnit { Product = water, Name = "كرتونة (12 زجاجة)", UnitType = UnitType.Carton, RetailPrice = 60, WholesalePrice = 55, QuantityPerParent = 12 }
+            new ProductUnit { Product = water, Name = "?????? (12 ?????)", UnitType = UnitType.Piece, RetailPrice = 60, WholesalePrice = 55, IsBaseUnit = true, QuantityPerParent = 1 },
+            new ProductUnit { Product = water, Name = "?????? (12 ?????)", UnitType = UnitType.Carton, RetailPrice = 60, WholesalePrice = 55, QuantityPerParent = 12 }
         );
 
         // Fix parent-child relationships

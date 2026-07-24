@@ -21,6 +21,25 @@ public partial class StockInDialog : UserControl
     private readonly ObservableCollection<StockInEntry> _selectedEntries = [];
     private List<Models.Product> _allProducts = [];
     private bool _loaded;
+    private int? _selectedCategoryId = null;
+
+    // ── Category chip model ──
+    private class CategoryChip : INotifyPropertyChanged
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public ICommand SelectCommand { get; set; } = null!;
+        private bool _isSelected;
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set { _isSelected = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected))); }
+        }
+        public event PropertyChangedEventHandler? PropertyChanged;
+    }
+
+    private readonly ObservableCollection<CategoryChip> _chips = new();
+    private List<CategoryChip> _allChips = new();
 
     public StockInDialog()
     {
@@ -28,14 +47,93 @@ public partial class StockInDialog : UserControl
         _db = new AppDbContext();
         _inv = new InventoryService(_db);
         SelectedItemsList.ItemsSource = _selectedEntries;
+        CategoryChips.ItemsSource = _chips;
+        LoadCategories();
         LoadProductCards();
         _loaded = true;
         Unloaded += (_, _) => { _db.Dispose(); };
     }
 
+    private void LoadCategories()
+    {
+        var cats = _db.Categories.OrderBy(c => c.Name).ToList();
+        _chips.Clear();
+        foreach (var cat in cats)
+        {
+            var chip = new CategoryChip { Id = cat.Id, Name = cat.Name, IsSelected = _selectedCategoryId == cat.Id };
+            chip.SelectCommand = new StockInRelayCommand(() =>
+            {
+                if (_selectedCategoryId == chip.Id)
+                {
+                    chip.IsSelected = false;
+                    _selectedCategoryId = null;
+                    SetChipAllActive(true);
+                }
+                else
+                {
+                    foreach (var c in _allChips) c.IsSelected = false;
+                    chip.IsSelected = true;
+                    _selectedCategoryId = chip.Id;
+                    SetChipAllActive(false);
+                }
+                LoadProductCards();
+            });
+            _chips.Add(chip);
+        }
+        _allChips = _chips.ToList();
+
+        var search = TxtCategorySearch?.Text?.Trim();
+        if (!string.IsNullOrEmpty(search)) FilterChips(search);
+    }
+
+    private void SetChipAllActive(bool active)
+    {
+        if (ChipAll == null) return;
+        ChipAll.Background = active
+            ? (Brush)Application.Current.FindResource("PrimaryBrush")
+            : (Brush)Application.Current.FindResource("CardBackground");
+    }
+
+    private void ChipAll_Click(object sender, MouseButtonEventArgs e)
+    {
+        _selectedCategoryId = null;
+        foreach (var c in _allChips) c.IsSelected = false;
+        SetChipAllActive(true);
+        LoadProductCards();
+    }
+
+    private void TxtCategorySearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        FilterChips(TxtCategorySearch.Text.Trim());
+    }
+
+    private void FilterChips(string filter)
+    {
+        _chips.Clear();
+        var source = string.IsNullOrEmpty(filter)
+            ? _allChips
+            : _allChips.Where(c => c.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var c in source) _chips.Add(c);
+    }
+
+    private List<int> GetCategoryAndDescendantIds(int catId)
+    {
+        var ids = new List<int> { catId };
+        var children = _db.Categories.Where(c => c.ParentCategoryId == catId).ToList();
+        foreach (var child in children) ids.AddRange(GetCategoryAndDescendantIds(child.Id));
+        return ids;
+    }
+
     private void LoadProductCards(string? search = null)
     {
         var query = _db.Products.AsQueryable();
+
+        if (_selectedCategoryId != null)
+        {
+            var catIds = GetCategoryAndDescendantIds(_selectedCategoryId.Value);
+            query = query.Where(p => p.CategoryId != null && catIds.Contains(p.CategoryId.Value));
+        }
+
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(p => p.Name.Contains(search));
 
@@ -95,9 +193,8 @@ public partial class StockInDialog : UserControl
     {
         if (!_loaded) return;
         var text = TxtSearch.Text;
-        if (text == "بحث عن منتج...")
-            return;
-        LoadProductCards(text);
+        if (text == ProductApp.Converters.WatermarkBehavior.GetWatermark(TxtSearch)) return;
+        LoadProductCards(string.IsNullOrWhiteSpace(text) ? null : text.Trim());
     }
 
     private async void BtnSave_Click(object sender, RoutedEventArgs e)

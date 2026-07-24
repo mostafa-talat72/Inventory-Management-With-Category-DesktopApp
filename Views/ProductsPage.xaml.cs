@@ -1,5 +1,8 @@
 using System;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -23,15 +26,43 @@ public partial class ProductsPage : Page
     private List<Product>? _allProducts;
     private Dictionary<int, (int Total, decimal Value)>? _stockDataDict;
     private decimal _totalStockValue;
+    private int? _selectedCategoryId;
+
+    private class CategoryCardItem : INotifyPropertyChanged
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string SubText { get; set; } = "";
+        public string Count { get; set; } = "";
+        public ICommand SelectCommand { get; set; } = null!;
+        public ICommand EditCommand { get; set; } = null!;
+        public ICommand DeleteCommand { get; set; } = null!;
+        public ICommand ContextCommand { get; set; } = null!;
+        private bool _isSelected;
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set { _isSelected = value; OnPropertyChanged(); }
+        }
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? n = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
+    }
+
+    private ObservableCollection<CategoryCardItem> _categoryCards = new();
+    private List<CategoryCardItem> _allCategoryCards = new();
 
     public ProductsPage()
     {
         _db = new AppDbContext();
         InitializeComponent();
 
+        CategoryCardsList.ItemsSource = _categoryCards;
+
         Loaded += (_, _) =>
         {
             AmountsVisibilityService.VisibilityChanged += OnAmountsVisibilityChanged;
+            LoadCategories();
         };
         Unloaded += (_, _) =>
         {
@@ -66,6 +97,158 @@ public partial class ProductsPage : Page
         BuildProductCards();
     }
 
+    private void LoadCategories()
+    {
+        var allCats = _db.Categories.OrderBy(c => c.Name).ToList();
+        TxtCategoryCount.Text = $"{allCats.Count} قسم";
+
+        var productCounts = _db.Products
+            .Where(p => p.CategoryId != null)
+            .GroupBy(p => p.CategoryId!.Value)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        _categoryCards.Clear();
+
+        var rootCats = allCats.Where(c => c.ParentCategoryId == null).OrderBy(c => c.Name).ToList();
+        foreach (var cat in rootCats)
+            AddCategoryCards(cat, allCats, productCounts, 0);
+
+        if (_selectedCategoryId != null)
+        {
+            var card = _categoryCards.FirstOrDefault(c => c.Id == _selectedCategoryId);
+            if (card != null) card.IsSelected = true;
+        }
+
+        // حفظ نسخة كاملة للفلترة
+        _allCategoryCards = _categoryCards.ToList();
+
+        // تطبيق نص البحث الحالي لو موجود
+        var searchText = TxtCategorySearch?.Text?.Trim();
+        if (!string.IsNullOrEmpty(searchText))
+            FilterCategoryCards(searchText);
+
+        ApplyAmountsMask();
+    }
+
+    private void AddCategoryCards(Category cat, List<Category> allCats,
+        Dictionary<int, int> counts, int depth)
+    {
+        int count = counts.GetValueOrDefault(cat.Id, 0);
+        int subCatCount = allCats.Count(c => c.ParentCategoryId == cat.Id);
+        var subText = subCatCount > 0 ? $"{subCatCount} قسم فرعي" : "";
+        var catCopy = cat;
+
+        var card = new CategoryCardItem
+        {
+            Id = cat.Id,
+            Name = (depth > 0 ? new string(' ', depth * 3) + "↳ " : "") + cat.Name,
+            SubText = subText,
+            Count = count > 0 ? $"{count}" : "",
+            IsSelected = _selectedCategoryId == cat.Id
+        };
+        card.SelectCommand = new RelayCommand(() => SelectCategory(card));
+        card.EditCommand   = new RelayCommand(() => OpenEditCategory(catCopy));
+        card.DeleteCommand = new RelayCommand(() => DeleteCategory(catCopy));
+        card.ContextCommand = new RelayCommand(() => { });
+
+        _categoryCards.Add(card);
+
+        foreach (var child in allCats.Where(c => c.ParentCategoryId == cat.Id).OrderBy(c => c.Name))
+            AddCategoryCards(child, allCats, counts, depth + 1);
+    }
+
+    private void SelectCategory(CategoryCardItem selected)
+    {
+        foreach (var c in _categoryCards) c.IsSelected = false;
+
+        if (_selectedCategoryId == selected.Id)
+        {
+            _selectedCategoryId = null;
+            AllProductsCard.Background = (Brush)Application.Current.FindResource("PrimaryBrush");
+        }
+        else
+        {
+            selected.IsSelected = true;
+            _selectedCategoryId = selected.Id;
+            AllProductsCard.Background = (Brush)Application.Current.FindResource("SurfaceBackground");
+        }
+        LoadProducts();
+    }
+
+    private void AllProducts_Click(object sender, MouseButtonEventArgs e)
+    {
+        _selectedCategoryId = null;
+        foreach (var c in _categoryCards) c.IsSelected = false;
+        AllProductsCard.Background = (Brush)Application.Current.FindResource("PrimaryBrush");
+        LoadProducts();
+    }
+
+    private void TxtCategorySearch_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        FilterCategoryCards(TxtCategorySearch.Text.Trim());
+    }
+
+    private void FilterCategoryCards(string filter)
+    {
+        _categoryCards.Clear();
+        var source = string.IsNullOrEmpty(filter)
+            ? _allCategoryCards
+            : _allCategoryCards.Where(c => c.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+        foreach (var c in source)
+            _categoryCards.Add(c);
+    }
+
+    private void AddCategory_Click(object sender, RoutedEventArgs e)
+    {
+        var mainWindow = (MainWindow)Window.GetWindow(this);
+        var dialog = new CategoryDialog(_db);
+        mainWindow.ShowOverlay(dialog);
+        dialog.DialogClosed += (s, r) =>
+        {
+            mainWindow.HideOverlay();
+            if (r == true) LoadCategories();
+        };
+    }
+
+    private void OpenEditCategory(Category cat)
+    {
+        var mainWindow = (MainWindow)Window.GetWindow(this);
+        var dialog = new CategoryDialog(_db, cat);
+        mainWindow.ShowOverlay(dialog);
+        dialog.DialogClosed += (s, r) =>
+        {
+            mainWindow.HideOverlay();
+            if (r == true) LoadCategories();
+        };
+    }
+
+    private void DeleteCategory(Category cat)
+    {
+        ConfirmDialog.Show("تأكيد الحذف", $"هل أنت متأكد من حذف القسم {cat.Name}؟", result =>
+        {
+            if (!result) return;
+            var tracked = _db.Categories.Find(cat.Id);
+            if (tracked == null) return;
+
+            var subCats = _db.Categories.Where(c => c.ParentCategoryId == cat.Id).ToList();
+            foreach (var sub in subCats)
+                sub.ParentCategoryId = null;
+
+            var products = _db.Products.Where(p => p.CategoryId == cat.Id).ToList();
+            foreach (var p in products)
+                p.CategoryId = null;
+
+            _db.Categories.Remove(tracked);
+            _db.SaveChanges();
+
+            if (_selectedCategoryId == cat.Id)
+                _selectedCategoryId = null;
+
+            LoadCategories();
+            LoadProducts();
+        }, ConfirmDialog.DialogType.Danger);
+    }
+
     private void LoadProducts()
     {
         if (_isLoading) return;
@@ -73,6 +256,13 @@ public partial class ProductsPage : Page
         try
         {
             var query = _db.Products.AsNoTracking();
+
+            if (_selectedCategoryId != null)
+            {
+                var catIds = GetCategoryAndDescendantIds(_selectedCategoryId.Value);
+                query = query.Where(p => p.CategoryId != null && catIds.Contains(p.CategoryId.Value));
+            }
+
             if (!string.IsNullOrWhiteSpace(_currentSearch))
                 query = query.Where(p => p.Name.Contains(_currentSearch));
 
@@ -104,6 +294,15 @@ public partial class ProductsPage : Page
             ApplyAmountsMask();
         }
         finally { _isLoading = false; }
+    }
+
+    private List<int> GetCategoryAndDescendantIds(int catId)
+    {
+        var ids = new List<int> { catId };
+        var children = _db.Categories.Where(c => c.ParentCategoryId == catId).ToList();
+        foreach (var child in children)
+            ids.AddRange(GetCategoryAndDescendantIds(child.Id));
+        return ids;
     }
 
     private void BuildProductCards()
