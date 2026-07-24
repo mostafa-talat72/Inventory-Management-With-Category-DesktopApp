@@ -341,17 +341,33 @@ namespace ProductApp.Views
         {
             if (_entries.ContainsKey(product.Id))
             {
-                // Already added — briefly highlight and scroll to it
                 var entry = _entries[product.Id];
-                var orig = entry.Container.Background;
-                entry.Container.Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xF8, 0xE1));
                 entry.Container.BringIntoView();
-                var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
-                timer.Tick += (_, _) => { timer.Stop(); entry.Container.Background = orig; };
-                timer.Start();
+                FlashEntry(entry.Container);
                 return;
             }
             AddProductToOrder(product);
+        }
+
+        private static void FlashEntry(Border container)
+        {
+            var original = container.Background;
+            int step = 0;
+            var timer = new System.Windows.Threading.DispatcherTimer
+                { Interval = TimeSpan.FromMilliseconds(180) };
+            timer.Tick += (_, _) =>
+            {
+                step++;
+                container.Background = step % 2 == 1
+                    ? new SolidColorBrush(Color.FromRgb(0x7C, 0x9B, 0xFF))  // أزرق فاتح
+                    : original;
+                if (step >= 4)
+                {
+                    timer.Stop();
+                    container.Background = original;
+                }
+            };
+            timer.Start();
         }
 
         private void AddProductToOrder(Product product)
