@@ -894,32 +894,16 @@ namespace ProductApp.Views
                     else if (diff < 0) // نقص — ارجع الفرق فقط
                     {
                         int retQty = -diff;
-                        var batch = _db.InventoryBatches
-                            .Where(b => b.ProductId == pid)
-                            .OrderByDescending(b => b.PurchaseDate).FirstOrDefault();
-                        if (batch != null)
-                            batch.RemainingQuantity += retQty;
-                        else
-                        {
-                            _db.InventoryBatches.Add(new InventoryBatch
-                            {
-                                ProductId = pid,
-                                CostPricePerPiece = 0,
-                                InitialQuantity = retQty,
-                                RemainingQuantity = retQty,
-                                PurchaseDate = DateTime.Now
-                            });
-                        }
+                        var (unitCost, totalCost) = _inv.ReturnToBatches(pid, retQty);
                         newCostByProduct[pid] = oldP > 0 ? oldCost * newP / oldP : 0;
 
-                        decimal unitCost = oldP > 0 ? oldCost / oldP : 0;
                         _db.InventoryMovements.Add(new InventoryMovement
                         {
                             ProductId = pid,
                             MovementType = MovementType.Return,
                             Quantity = retQty,
                             CostPrice = unitCost,
-                            SellingPrice = unitCost * retQty,
+                            SellingPrice = totalCost,
                             ReferenceType = ReferenceType.Return,
                             ReferenceId = _invoice.Id,
                             Notes = $"نقص تعديل طلب #{order.Id} - فاتورة #{_invoice.Id}"

@@ -375,31 +375,15 @@ public partial class ManageOrdersDialog : UserControl
     private void ReturnStockToBatches(int productId, int totalPieces, decimal costPrice)
     {
         if (totalPieces <= 0) return;
-        var batch = _db.InventoryBatches
-            .Where(b => b.ProductId == productId && b.RemainingQuantity > 0)
-            .OrderByDescending(b => b.PurchaseDate)
-            .FirstOrDefault();
-        if (batch != null)
-            batch.RemainingQuantity += totalPieces;
-        else
-        {
-            _db.InventoryBatches.Add(new InventoryBatch
-            {
-                ProductId = productId,
-                CostPricePerPiece = totalPieces > 0 ? costPrice / totalPieces : 0,
-                InitialQuantity = totalPieces,
-                RemainingQuantity = totalPieces,
-                PurchaseDate = DateTime.Now
-            });
-        }
+        var (unitCost, totalCost) = _inv.ReturnToBatches(productId, totalPieces);
 
         _db.InventoryMovements.Add(new InventoryMovement
         {
             ProductId = productId,
             MovementType = MovementType.Return,
             Quantity = totalPieces,
-            CostPrice = totalPieces > 0 ? costPrice / totalPieces : 0,
-            SellingPrice = costPrice,
+            CostPrice = unitCost,
+            SellingPrice = totalCost,
             ReferenceType = ReferenceType.Return,
             ReferenceId = _invoice.Id,
             Notes = $"مرتجع حذف طلب - فاتورة #{_invoice.Id}"

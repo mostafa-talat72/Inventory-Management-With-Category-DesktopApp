@@ -495,29 +495,14 @@ public partial class CustomerInvoicesDialog : UserControl
                         if (item.ProductUnit == null) continue;
                         int totalPieces = inv.CalculatePieceEquivalent(item.Product, item.CartonQuantity, item.BoxQuantity, item.PieceQuantity);
                         if (totalPieces <= 0) continue;
-                        var batch = _db.InventoryBatches
-                            .Where(b => b.ProductId == item.ProductId && b.RemainingQuantity > 0)
-                            .OrderByDescending(b => b.PurchaseDate)
-                            .FirstOrDefault();
-                        if (batch != null)
-                            batch.RemainingQuantity += totalPieces;
-                        else
-                        {
-                            _db.InventoryBatches.Add(new InventoryBatch
-                            {
-                                ProductId = item.ProductId,
-                                CostPricePerPiece = item.CostPrice / totalPieces,
-                                InitialQuantity = totalPieces,
-                                RemainingQuantity = totalPieces,
-                                PurchaseDate = DateTime.Now
-                            });
-                        }
+                        var (unitCost, totalCost) = inv.ReturnToBatches(item.ProductId, totalPieces);
                         _db.InventoryMovements.Add(new InventoryMovement
                         {
                             ProductId = item.ProductId,
                             MovementType = MovementType.Return,
                             Quantity = totalPieces,
-                            CostPrice = item.CostPrice / totalPieces,
+                            CostPrice = unitCost,
+                            SellingPrice = totalCost,
                             ReferenceType = ReferenceType.Return,
                             ReferenceId = full.Id,
                             Notes = $"مرتجعات بيع - فاتورة #{full.Id}"

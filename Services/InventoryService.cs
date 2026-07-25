@@ -205,6 +205,43 @@ public class InventoryService
         await _db.SaveChangesAsync();
     }
 
+    public (decimal unitCost, decimal totalCost) ReturnToBatches(int productId, int totalPieces)
+    {
+        if (totalPieces <= 0) return (0, 0);
+        decimal totalCost = 0;
+        int remaining = totalPieces;
+
+        var batches = _db.InventoryBatches
+            .Where(b => b.ProductId == productId)
+            .OrderByDescending(b => b.PurchaseDate)
+            .ToList();
+
+        foreach (var batch in batches)
+        {
+            if (remaining <= 0) break;
+            int consumed = batch.InitialQuantity - batch.RemainingQuantity;
+            if (consumed <= 0) continue;
+            int returnQty = Math.Min(remaining, consumed);
+            batch.RemainingQuantity += returnQty;
+            totalCost += returnQty * batch.CostPricePerPiece;
+            remaining -= returnQty;
+        }
+
+        if (remaining > 0)
+        {
+            _db.InventoryBatches.Add(new InventoryBatch
+            {
+                ProductId = productId,
+                CostPricePerPiece = 0,
+                InitialQuantity = remaining,
+                RemainingQuantity = remaining,
+                PurchaseDate = DateTime.Now
+            });
+        }
+
+        return (totalPieces > 0 ? totalCost / totalPieces : 0, totalCost);
+    }
+
     public async Task StockOut(Product product, int totalPieces, string? notes = null)
     {
         var batches = _db.InventoryBatches
