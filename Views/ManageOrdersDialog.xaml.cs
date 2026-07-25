@@ -399,6 +399,7 @@ public partial class ManageOrdersDialog : UserControl
             MovementType = MovementType.Return,
             Quantity = totalPieces,
             CostPrice = totalPieces > 0 ? costPrice / totalPieces : 0,
+            SellingPrice = costPrice,
             ReferenceType = ReferenceType.Return,
             ReferenceId = _invoice.Id,
             Notes = $"مرتجع حذف طلب - فاتورة #{_invoice.Id}"

@@ -807,86 +807,149 @@ namespace ProductApp.Views
             {
                 var order = _orderToEdit!;
 
-                // ارجع مخزون كل item قديم واحفظ فوراً
+                // 1- اجمع بيانات القديم لكل منتج (عدد القطع + التكلفة)
+                var oldData = new Dictionary<int, (int pieces, decimal cost)>();
                 foreach (var oldItem in order.Items.ToList())
                 {
                     _db.Entry(oldItem).Reference(oi => oi.Product!).Load();
-                    int oldPieces = _inv.CalculatePieceEquivalent(oldItem.Product!, oldItem.CartonQuantity, oldItem.BoxQuantity, oldItem.PieceQuantity);
-
-                    // أرجع الكمية للـ batch
-                    var batch = _db.InventoryBatches
-                        .Where(b => b.ProductId == oldItem.ProductId)
-                        .OrderByDescending(b => b.PurchaseDate).FirstOrDefault();
-                    if (batch != null)
-                        batch.RemainingQuantity += oldPieces;
+                    int p = _inv.CalculatePieceEquivalent(oldItem.Product!, oldItem.CartonQuantity, oldItem.BoxQuantity, oldItem.PieceQuantity);
+                    if (oldData.ContainsKey(oldItem.ProductId))
+                        oldData[oldItem.ProductId] = (oldData[oldItem.ProductId].pieces + p, oldData[oldItem.ProductId].cost + oldItem.CostPrice);
                     else
+                        oldData[oldItem.ProductId] = (p, oldItem.CostPrice);
+                }
+
+                // 2- احسب الجديد لكل منتج
+                var newPiecesTotal = new Dictionary<int, int>();
+                foreach (var entry in _entries.Values)
+                {
+                    int retail = _inv.CalculatePieceEquivalent(entry.Product, entry.RetailCarton, entry.RetailBox, entry.RetailPiece);
+                    int wholesale = _inv.CalculatePieceEquivalent(entry.Product, entry.WholesaleCarton, entry.WholesaleBox, entry.WholesalePiece);
+                    int total = retail + wholesale;
+                    newPiecesTotal[entry.Product.Id] = newPiecesTotal.GetValueOrDefault(entry.Product.Id) + total;
+                }
+
+                // 3- افحص المخزون للزيادات فقط
+                foreach (var pid in newPiecesTotal.Keys)
+                {
+                    int oldP = oldData.GetValueOrDefault(pid).pieces;
+                    int newP = newPiecesTotal[pid];
+                    int diff = newP - oldP;
+                    if (diff > 0)
                     {
-                        _db.InventoryBatches.Add(new InventoryBatch
+                        var prod = _db.Products.Find(pid);
+                        if (prod != null && !_inv.IsStockSufficient(prod, 0, 0, diff))
                         {
-                            ProductId = oldItem.ProductId,
-                            CostPricePerPiece = oldPieces > 0 ? oldItem.CostPrice / oldPieces : 0,
-                            InitialQuantity = oldPieces,
-                            RemainingQuantity = oldPieces,
-                            PurchaseDate = DateTime.Now
-                        });
+                            NotificationManager.ShowWarning($"المخزون غير كافٍ لـ {prod.Name}");
+                            return;
+                        }
                     }
+                }
 
-                    // سجّل حركة الإرجاع في سجل المخزون
-                    _db.InventoryMovements.Add(new InventoryMovement
-                    {
-                        ProductId    = oldItem.ProductId,
-                        MovementType = MovementType.Return,
-                        Quantity     = oldPieces,
-                        CostPrice    = oldPieces > 0 ? oldItem.CostPrice / oldPieces : 0,
-                        ReferenceType = ReferenceType.Return,
-                        ReferenceId  = _invoice!.Id,
-                        Notes        = $"مرتجع تعديل طلب #{order.Id} - فاتورة #{_invoice!.Id}"
-                    });
-
-                    _invoice!.TotalAmount -= oldItem.Total;
+                // 4- احذف الـ items القديمة من السياق (المخزون لسه ما ائثرش)
+                _invoice!.TotalAmount = 0;
+                foreach (var oldItem in order.Items.ToList())
+                {
+                    _invoice.TotalAmount -= oldItem.Total;
                     _db.OrderItems.Remove(oldItem);
                 }
-                _db.SaveChanges();
 
-                // فحص المخزون بعد إرجاع الكميات القديمة وحفظها في قاعدة البيانات
-                foreach (var entry in _entries.Values)
+                // 5- طبق الفرق الصافي في المخزون + سجل الحركة
+                var newCostByProduct = new Dictionary<int, decimal>();
+                var productNewTotalPieces = new Dictionary<int, int>();
+                foreach (var pid in oldData.Keys.Union(newPiecesTotal.Keys))
                 {
-                    if (entry.RetailCarton > 0 || entry.RetailBox > 0 || entry.RetailPiece > 0)
+                    int oldP = oldData.GetValueOrDefault(pid).pieces;
+                    int newP = newPiecesTotal.GetValueOrDefault(pid, 0);
+                    int diff = newP - oldP;
+                    decimal oldCost = oldData.GetValueOrDefault(pid).cost;
+                    productNewTotalPieces[pid] = newP;
+
+                    if (diff > 0) // زيادة — خصم الفرق فقط
                     {
-                        if (!_inv.IsStockSufficient(entry.Product, entry.RetailCarton, entry.RetailBox, entry.RetailPiece))
+                        var prod = _db.Products.Find(pid);
+                        if (prod != null)
                         {
-                            NotificationManager.ShowWarning($"المخزون غير كافٍ لـ {entry.Product.Name} (قطاعي)");
-                            return;
+                            var (fifoCost, consumed) = _inv.CalculateFifoCost(prod, diff);
+                            foreach (var batch in consumed)
+                            {
+                                var b = _db.InventoryBatches.Find(batch.Id);
+                                if (b != null) b.RemainingQuantity = batch.RemainingQuantity;
+                            }
+                            newCostByProduct[pid] = oldCost + fifoCost;
+
+                            _db.InventoryMovements.Add(new InventoryMovement
+                            {
+                                ProductId = pid,
+                                MovementType = MovementType.StockOut,
+                                Quantity = diff,
+                                CostPrice = diff > 0 ? fifoCost / diff : 0,
+                                SellingPrice = 0,
+                                ReferenceType = ReferenceType.Sale,
+                                ReferenceId = order.Id,
+                                Notes = $"زيادة تعديل طلب #{order.Id} - فاتورة #{_invoice.Id}"
+                            });
                         }
                     }
-                    if (entry.WholesaleCarton > 0 || entry.WholesaleBox > 0 || entry.WholesalePiece > 0)
+                    else if (diff < 0) // نقص — ارجع الفرق فقط
                     {
-                        if (!_inv.IsStockSufficient(entry.Product, entry.WholesaleCarton, entry.WholesaleBox, entry.WholesalePiece))
+                        int retQty = -diff;
+                        var batch = _db.InventoryBatches
+                            .Where(b => b.ProductId == pid)
+                            .OrderByDescending(b => b.PurchaseDate).FirstOrDefault();
+                        if (batch != null)
+                            batch.RemainingQuantity += retQty;
+                        else
                         {
-                            NotificationManager.ShowWarning($"المخزون غير كافٍ لـ {entry.Product.Name} (جملة)");
-                            return;
+                            _db.InventoryBatches.Add(new InventoryBatch
+                            {
+                                ProductId = pid,
+                                CostPricePerPiece = 0,
+                                InitialQuantity = retQty,
+                                RemainingQuantity = retQty,
+                                PurchaseDate = DateTime.Now
+                            });
                         }
+                        newCostByProduct[pid] = oldP > 0 ? oldCost * newP / oldP : 0;
+
+                        decimal unitCost = oldP > 0 ? oldCost / oldP : 0;
+                        _db.InventoryMovements.Add(new InventoryMovement
+                        {
+                            ProductId = pid,
+                            MovementType = MovementType.Return,
+                            Quantity = retQty,
+                            CostPrice = unitCost,
+                            SellingPrice = unitCost * retQty,
+                            ReferenceType = ReferenceType.Return,
+                            ReferenceId = _invoice.Id,
+                            Notes = $"نقص تعديل طلب #{order.Id} - فاتورة #{_invoice.Id}"
+                        });
+                    }
+                    else // diff == 0 — ما فيش تغيير في المخزون
+                    {
+                        newCostByProduct[pid] = oldCost;
                     }
                 }
 
-                // أضف الـ items الجديدة على نفس الـ order
+                _db.SaveChanges();
+
+                // 6- أنشئ OrderItems جديدة (بدون لمس المخزون)
                 foreach (var entry in _entries.Values)
                 {
                     if (entry.RetailCarton > 0 || entry.RetailBox > 0 || entry.RetailPiece > 0)
-                        AddOrderItem(order, entry, PriceType.Retail);
+                        CreateEditOrderItem(order, entry, PriceType.Retail, newCostByProduct, productNewTotalPieces);
                     if (entry.WholesaleCarton > 0 || entry.WholesaleBox > 0 || entry.WholesalePiece > 0)
-                        AddOrderItem(order, entry, PriceType.Wholesale);
+                        CreateEditOrderItem(order, entry, PriceType.Wholesale, newCostByProduct, productNewTotalPieces);
                 }
 
                 _db.SaveChanges();
 
-                // إعادة حساب الإجمالي
-                var orderIds = _db.Orders.Where(o => o.InvoiceId == _invoice!.Id).Select(o => o.Id).ToList();
-                _invoice!.TotalAmount = _db.OrderItems.Where(oi => orderIds.Contains(oi.OrderId)).Sum(oi => oi.Total);
+                // 7- إعادة حساب إجمالي الفاتورة
+                var orderIds = _db.Orders.Where(o => o.InvoiceId == _invoice.Id).Select(o => o.Id).ToList();
+                _invoice.TotalAmount = _db.OrderItems.Where(oi => orderIds.Contains(oi.OrderId)).Sum(oi => oi.Total);
                 _db.SaveChanges();
 
                 App.AppBackup?.BackupIfOnOperation();
-
                 NotificationManager.ShowSuccess($"تم تعديل الطلب وتحديث الفاتورة #{_invoice.Id} بنجاح.");
                 OpenInvoiceDialog(_invoice!);
             }
@@ -895,6 +958,47 @@ namespace ProductApp.Views
                 LogError(ex);
                 NotificationManager.ShowError($"حدث خطأ أثناء حفظ التعديل: {ex.Message}");
             }
+        }
+
+        private void CreateEditOrderItem(Order order, OrderItemEntry entry, PriceType priceType,
+            Dictionary<int, decimal> costByProduct, Dictionary<int, int> productTotalPieces)
+        {
+            var product = entry.Product;
+            int cartonQty = priceType == PriceType.Retail ? entry.RetailCarton : entry.WholesaleCarton;
+            int boxQty = priceType == PriceType.Retail ? entry.RetailBox : entry.WholesaleBox;
+            int pieceQty = priceType == PriceType.Retail ? entry.RetailPiece : entry.WholesalePiece;
+            if (cartonQty == 0 && boxQty == 0 && pieceQty == 0) return;
+
+            int totalPieces = _inv.CalculatePieceEquivalent(product, cartonQty, boxQty, pieceQty);
+
+            ProductUnit? usedUnit = null;
+            if (cartonQty > 0 && entry.CartonUnit != null) usedUnit = entry.CartonUnit;
+            else if (boxQty > 0 && entry.BoxUnit != null) usedUnit = entry.BoxUnit;
+            else if (pieceQty > 0 && entry.PieceUnit != null) usedUnit = entry.PieceUnit;
+
+            decimal totalPrice = 0;
+            if (entry.CartonUnit != null) totalPrice += cartonQty * (priceType == PriceType.Retail ? entry.CartonUnit.RetailPrice : entry.CartonUnit.WholesalePrice);
+            if (entry.BoxUnit != null) totalPrice += boxQty * (priceType == PriceType.Retail ? entry.BoxUnit.RetailPrice : entry.BoxUnit.WholesalePrice);
+            if (entry.PieceUnit != null) totalPrice += pieceQty * (priceType == PriceType.Retail ? entry.PieceUnit.RetailPrice : entry.PieceUnit.WholesalePrice);
+
+            int totalForProd = productTotalPieces.GetValueOrDefault(product.Id, 0);
+            decimal itemCost = totalForProd > 0
+                ? costByProduct.GetValueOrDefault(product.Id, 0) * totalPieces / totalForProd
+                : 0;
+
+            _db.OrderItems.Add(new OrderItem
+            {
+                OrderId = order.Id,
+                ProductId = product.Id,
+                ProductUnitId = usedUnit?.Id ?? 0,
+                CartonQuantity = cartonQty,
+                BoxQuantity = boxQty,
+                PieceQuantity = pieceQty,
+                UnitPrice = usedUnit != null ? (priceType == PriceType.Retail ? usedUnit.RetailPrice : usedUnit.WholesalePrice) : 0,
+                PriceType = priceType,
+                Total = totalPrice,
+                CostPrice = itemCost
+            });
         }
 
         private void AddOrderItem(Order order, OrderItemEntry entry, PriceType priceType)
