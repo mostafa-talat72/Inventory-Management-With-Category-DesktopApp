@@ -25,6 +25,8 @@ namespace ProductApp.Views
         private Order? _orderToEdit;
         private readonly Dictionary<int, OrderItemEntry> _entries = new();
         private int? _selectedCategoryId = null;
+        private readonly Dictionary<int, System.Windows.Threading.DispatcherTimer> _flashTimers = new();
+        private readonly Dictionary<int, Brush?> _flashOriginals = new();
 
         private class CategoryChip : System.ComponentModel.INotifyPropertyChanged
         {
@@ -343,7 +345,38 @@ namespace ProductApp.Views
             {
                 var entry = _entries[product.Id];
                 entry.Container.BringIntoView();
-                FlashEntry(entry.Container);
+                // أوقف timer سابق لنفس المنتج
+                if (_flashTimers.TryGetValue(product.Id, out var old))
+                {
+                    old.Stop();
+                    _flashTimers.Remove(product.Id);
+                    if (_flashOriginals.TryGetValue(product.Id, out var savedBrush))
+                    {
+                        entry.Container.Background = savedBrush;
+                        _flashOriginals.Remove(product.Id);
+                    }
+                }
+                var original = entry.Container.Background;
+                _flashOriginals[product.Id] = original;
+                int step = 0;
+                var timer = new System.Windows.Threading.DispatcherTimer
+                    { Interval = TimeSpan.FromMilliseconds(180) };
+                _flashTimers[product.Id] = timer;
+                timer.Tick += (_, _) =>
+                {
+                    step++;
+                    entry.Container.Background = step % 2 == 1
+                        ? new SolidColorBrush(Color.FromRgb(0x7C, 0x9B, 0xFF))
+                        : original;
+                    if (step >= 4)
+                    {
+                        timer.Stop();
+                        _flashTimers.Remove(product.Id);
+                        _flashOriginals.Remove(product.Id);
+                        entry.Container.Background = original;
+                    }
+                };
+                timer.Start();
                 return;
             }
             AddProductToOrder(product);
@@ -351,20 +384,37 @@ namespace ProductApp.Views
 
         private static void FlashEntry(Border container)
         {
-            var original = container.Background;
+            FlashBorder(container, Color.FromRgb(0x7C, 0x9B, 0xFF));
+        }
+
+        private static void FlashBorder(Border border, Color flashColor)
+        {
+            // أوقف timer سابق مخزَّن في Tag
+            if (border.Tag is System.Windows.Threading.DispatcherTimer old)
+            {
+                old.Stop();
+            }
+            // استعد اللون الأصلي إن كان مخزَّناً
+            if (border.Tag is Brush savedBrush)
+                border.Background = savedBrush;
+
+            var original = border.Background;
             int step = 0;
             var timer = new System.Windows.Threading.DispatcherTimer
                 { Interval = TimeSpan.FromMilliseconds(180) };
+            // خزّن الـ timer والـ original معاً باستخدام Tuple
+            border.Tag = (timer, original);
             timer.Tick += (_, _) =>
             {
                 step++;
-                container.Background = step % 2 == 1
-                    ? new SolidColorBrush(Color.FromRgb(0x7C, 0x9B, 0xFF))  // أزرق فاتح
+                border.Background = step % 2 == 1
+                    ? new SolidColorBrush(flashColor)
                     : original;
                 if (step >= 4)
                 {
                     timer.Stop();
-                    container.Background = original;
+                    border.Background = original;
+                    border.Tag = null;
                 }
             };
             timer.Start();

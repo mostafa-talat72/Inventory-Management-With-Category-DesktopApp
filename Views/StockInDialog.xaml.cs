@@ -38,6 +38,8 @@ public partial class StockInDialog : UserControl
         public event PropertyChangedEventHandler? PropertyChanged;
     }
 
+    private readonly Dictionary<int, System.Windows.Threading.DispatcherTimer> _flashTimers = new();
+    private readonly Dictionary<int, Brush?> _originalBrushes = new();
     private readonly ObservableCollection<CategoryChip> _chips = new();
     private List<CategoryChip> _allChips = new();
 
@@ -196,22 +198,38 @@ public partial class StockInDialog : UserControl
             var border = FindFirstBorder(container);
             if (border == null) return;
 
-            var original = border.Background;
+            // أوقف timer سابق لنفس المنتج إن وجد
+            if (_flashTimers.TryGetValue(entry.ProductId, out var old))
+            {
+                old.Stop();
+                _flashTimers.Remove(entry.ProductId);
+                // استعد اللون الأصلي
+                if (_originalBrushes.TryGetValue(entry.ProductId, out var saved))
+                {
+                    border.Background = saved;
+                    _originalBrushes.Remove(entry.ProductId);
+                }
+            }
 
-            // وميضان متتاليان
+            var original = border.Background;
+            _originalBrushes[entry.ProductId] = original;
+
             int step = 0;
             var timer = new System.Windows.Threading.DispatcherTimer
                 { Interval = TimeSpan.FromMilliseconds(180) };
+            _flashTimers[entry.ProductId] = timer;
+
             timer.Tick += (_, _) =>
             {
                 step++;
                 border.Background = step % 2 == 1
-                    ? new SolidColorBrush(Color.FromRgb(0x00, 0xC8, 0x96))   // أخضر فاتح
+                    ? new SolidColorBrush(Color.FromRgb(0x00, 0xC8, 0x96))
                     : original;
-
-                if (step >= 4) // وميضتان
+                if (step >= 4)
                 {
                     timer.Stop();
+                    _flashTimers.Remove(entry.ProductId);
+                    _originalBrushes.Remove(entry.ProductId);
                     border.Background = original;
                 }
             };
