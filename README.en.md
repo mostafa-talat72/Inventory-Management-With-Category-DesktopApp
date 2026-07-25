@@ -83,7 +83,7 @@ MTE Stock/
 - **OS**: Windows 10 / 11
 - **Framework**: .NET 9.0 Runtime
 - **Database**: SQLite (embedded, no installation required)
-- **Installer**: `MTEStock_Setup_V1.3.exe`
+- **Installer**: `MTEStock_Setup.exe`
 
 Database and config files are stored in `%LOCALAPPDATA%\MTE Stock\`
 
