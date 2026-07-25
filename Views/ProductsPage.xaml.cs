@@ -337,6 +337,7 @@ public partial class ProductsPage : Page
                 WholesaleDisplay  = units.Count > 0 ? units.Min(u => u.WholesalePrice).ToString("0.##") : "-",
                 Product           = p,
                 SelectCommand     = new RelayCommand(() => OpenUnitLevelsDialog(p)),
+                AddStockCommand   = new RelayCommand(() => OpenStockInForProduct(p)),
                 EditCommand       = new RelayCommand(() => OpenEditDialog(p)),
                 DeleteCommand     = new RelayCommand(() => DeleteProduct(p))
             });
@@ -416,6 +417,19 @@ public partial class ProductsPage : Page
     {
         var mainWindow = (MainWindow)Window.GetWindow(this);
         var dialog = new StockInDialog();
+        mainWindow.ShowOverlay(dialog);
+        dialog.DialogClosed += (s, r) =>
+        {
+            mainWindow.HideOverlay();
+            if (r == true) LoadProducts();
+        };
+    }
+
+    private void OpenStockInForProduct(Product product)
+    {
+        var mainWindow = (MainWindow)Window.GetWindow(this);
+        var dialog = new StockInDialog();
+        dialog.PreSelectProduct(product);
         mainWindow.ShowOverlay(dialog);
         dialog.DialogClosed += (s, r) =>
         {

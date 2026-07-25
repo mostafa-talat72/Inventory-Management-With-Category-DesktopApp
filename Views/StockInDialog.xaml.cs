@@ -155,9 +155,10 @@ public partial class StockInDialog : UserControl
         ProductCards.ItemsSource = cardItems;
     }
 
+    public void PreSelectProduct(Models.Product product) => AddProduct(product);
+
     private void AddProduct(Models.Product product)
-    {
-        // لو موجود — اسكرول إليه وأضئه
+    {// لو موجود — اسكرول إليه وأضئه
         var existing = _selectedEntries.FirstOrDefault(e => e.ProductId == product.Id);
         if (existing != null)
         {
