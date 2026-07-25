@@ -91,7 +91,7 @@ Database and config files are stored in `%LOCALAPPDATA%\MTE Stock\`
 
 ## Installation
 
-1. Run `MTEStock_Setup_V1.3.exe`
+1. Run `MTEStock_Setup`
 2. The installer is password-protected — contact the developer for the password
 3. Follow the installation steps (default path: `%PROGRAMFILES%\MTE Stock`)
 4. Desktop and Start Menu shortcuts will be created
@@ -103,6 +103,6 @@ Database and config files are stored in `%LOCALAPPDATA%\MTE Stock\`
 
 **Eng. Mostafa Talat** — Software Solutions  
 Phone: `01116626164`  
-Email: `m.talat7274@gmail.com`
+Email: `mostafa.taal3t@gmail.com`
 
 © 2025 Eng. Mostafa Talat for Software Solutions
