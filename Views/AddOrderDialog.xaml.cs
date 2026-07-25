@@ -271,8 +271,8 @@ namespace ProductApp.Views
             if (ChipAll == null) return;
             ChipAll.Background = active
                 ? (System.Windows.Media.Brush)Application.Current.FindResource("PrimaryBrush")
-                : (System.Windows.Media.Brush)Application.Current.FindResource("CardBackground");
-            var tb = ChipAll.Child as TextBlock;
+                : (System.Windows.Media.Brush)Application.Current.FindResource("SurfaceBackground");
+            var tb = ChipAll.Child is StackPanel sp ? sp.Children.OfType<TextBlock>().FirstOrDefault() : null;
             if (tb != null)
                 tb.Foreground = active
                     ? System.Windows.Media.Brushes.White

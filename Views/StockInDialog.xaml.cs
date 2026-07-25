@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -93,7 +94,12 @@ public partial class StockInDialog : UserControl
         if (ChipAll == null) return;
         ChipAll.Background = active
             ? (Brush)Application.Current.FindResource("PrimaryBrush")
-            : (Brush)Application.Current.FindResource("CardBackground");
+            : (Brush)Application.Current.FindResource("SurfaceBackground");
+        var tb = ChipAll.Child is StackPanel sp ? sp.Children.OfType<TextBlock>().FirstOrDefault() : null;
+        if (tb != null)
+            tb.Foreground = active
+                ? Brushes.White
+                : (Brush)Application.Current.FindResource("HeadingTextBrush");
     }
 
     private void ChipAll_Click(object sender, MouseButtonEventArgs e)
