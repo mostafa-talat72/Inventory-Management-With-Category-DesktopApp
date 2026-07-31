@@ -23,6 +23,7 @@ public partial class ProductsPage : Page
     private string? _currentSearch;
     private bool _loaded;
     private bool _isLoading;
+    private bool _lowStockOnly;
     private List<Product>? _allProducts;
     private Dictionary<int, (int Total, decimal Value)>? _stockDataDict;
     private decimal _totalStockValue;
@@ -208,6 +209,12 @@ public partial class ProductsPage : Page
         FilterCategoryCards(TxtCategorySearch.Text.Trim());
     }
 
+    private void TglLowStockOnly_Changed(object sender, RoutedEventArgs e)
+    {
+        _lowStockOnly = TglLowStockOnly.IsChecked == true;
+        LoadProducts();
+    }
+
     private void FilterCategoryCards(string filter)
     {
         _categoryCards.Clear();
@@ -293,6 +300,11 @@ public partial class ProductsPage : Page
                 .Select(g => new { ProductId = g.Key, Total = g.Sum(b => b.RemainingQuantity), Value = g.Sum(b => (decimal)b.RemainingQuantity * b.CostPricePerPiece) })
                 .ToDictionary(x => x.ProductId, x => (Total: x.Total, Value: x.Value));
 
+            if (_lowStockOnly)
+                _allProducts = _allProducts
+                    .Where(p => _stockDataDict.GetValueOrDefault(p.Id).Total <= 0)
+                    .ToList();
+
             var inv = new InventoryService(_db);
             var totalStockPieces = 0;
             var lowStockCount = 0;
@@ -358,6 +370,8 @@ public partial class ProductsPage : Page
                 Product           = p,
                 SelectCommand     = new RelayCommand(() => OpenUnitLevelsDialog(p)),
                 AddStockCommand   = new RelayCommand(() => OpenStockInForProduct(p)),
+                DeductStockCommand = new RelayCommand(() => OpenStockDeductionForProduct(p)),
+                HistoryCommand    = new RelayCommand(() => OpenStockMovementForProduct(p)),
                 EditCommand       = new RelayCommand(() => OpenEditDialog(p)),
                 DeleteCommand     = new RelayCommand(() => DeleteProduct(p))
             });
@@ -455,6 +469,30 @@ public partial class ProductsPage : Page
         {
             mainWindow.HideOverlay();
             if (r == true) LoadProducts();
+        };
+    }
+
+    private void OpenStockDeductionForProduct(Product product)
+    {
+        var mainWindow = (MainWindow)Window.GetWindow(this);
+        var dialog = new StockDeductionDialog(_db, product);
+        mainWindow.ShowOverlay(dialog);
+        dialog.DialogClosed += (s, r) =>
+        {
+            mainWindow.HideOverlay();
+            if (r == true) LoadProducts();
+        };
+    }
+
+    private void OpenStockMovementForProduct(Product product)
+    {
+        var mainWindow = (MainWindow)Window.GetWindow(this);
+        var dialog = new StockMovementDialog(_db, product);
+        mainWindow.ShowOverlay(dialog);
+        dialog.DialogClosed += (s, r) =>
+        {
+            mainWindow.HideOverlay();
+            LoadProducts();
         };
     }
 
