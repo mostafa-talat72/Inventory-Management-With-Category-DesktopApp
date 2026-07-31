@@ -164,13 +164,13 @@ public partial class ProductsPage : Page
         if (_selectedCategoryId == selected.Id)
         {
             _selectedCategoryId = null;
-            AllProductsCard.Background = (Brush)Application.Current.FindResource("PrimaryBrush");
+            SetAllProductsCardState(true);
         }
         else
         {
             selected.IsSelected = true;
             _selectedCategoryId = selected.Id;
-            AllProductsCard.Background = (Brush)Application.Current.FindResource("SurfaceBackground");
+            SetAllProductsCardState(false);
         }
         LoadProducts();
     }
@@ -179,8 +179,28 @@ public partial class ProductsPage : Page
     {
         _selectedCategoryId = null;
         foreach (var c in _categoryCards) c.IsSelected = false;
-        AllProductsCard.Background = (Brush)Application.Current.FindResource("PrimaryBrush");
+        SetAllProductsCardState(true);
         LoadProducts();
+    }
+
+    private void SetAllProductsCardState(bool selected)
+    {
+        if (selected)
+        {
+            AllProductsCard.Background = (Brush)Application.Current.FindResource("PrimaryBrush");
+            AllProductsCard.BorderThickness = new Thickness(0);
+            AllProductsText.Foreground = Brushes.White;
+            AllProductsIcon.Fill = Brushes.White;
+            AllProductsIconBadge.Background = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF));
+        }
+        else
+        {
+            AllProductsCard.Background = (Brush)Application.Current.FindResource("CardBackground");
+            AllProductsCard.BorderThickness = new Thickness(1);
+            AllProductsText.Foreground = (Brush)Application.Current.FindResource("HeadingTextBrush");
+            AllProductsIcon.Fill = (Brush)Application.Current.FindResource("BodyTextBrush");
+            AllProductsIconBadge.Background = (Brush)Application.Current.FindResource("SurfaceBackground");
+        }
     }
 
     private void TxtCategorySearch_TextChanged(object sender, TextChangedEventArgs e)
