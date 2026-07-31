@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -45,6 +46,9 @@ public partial class ProductsPage : Page
         public required string BadgeBg { get; init; }
         public required string BadgeFg { get; init; }
         public required string HasBadge { get; init; }
+        public System.Windows.Media.ImageSource? ProductImage { get; init; }
+        public required string HasImage { get; init; }
+        public required string NoImage { get; init; }
         public required Product Product { get; init; }
         public required ICommand SelectCommand { get; init; }
         public required ICommand AddStockCommand { get; init; }
@@ -515,6 +519,22 @@ public partial class ProductsPage : Page
                     ? ("منخفض", "#FFA726", "#4E342E", "Visible")
                     : ("", "", "", "Collapsed");
 
+            System.Windows.Media.ImageSource? imageSource = null;
+            if (!string.IsNullOrWhiteSpace(p.ImagePath) && File.Exists(p.ImagePath))
+            {
+                try
+                {
+                    var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.UriSource = new Uri(p.ImagePath);
+                    bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    bitmap.DecodePixelWidth = 84;
+                    bitmap.EndInit();
+                    imageSource = bitmap;
+                }
+                catch { }
+            }
+
             cards.Add(new ProductCardItem
             {
                 Name = p.Name,
@@ -529,6 +549,9 @@ public partial class ProductsPage : Page
                 BadgeBg = badgeBg,
                 BadgeFg = badgeFg,
                 HasBadge = badgeVisibility,
+                ProductImage = imageSource,
+                HasImage = imageSource != null ? "Visible" : "Collapsed",
+                NoImage = imageSource == null ? "Visible" : "Collapsed",
                 Product = p,
                 SelectCommand = new RelayCommand(() => OpenUnitLevelsDialog(p)),
                 AddStockCommand = new RelayCommand(() => OpenStockInForProduct(p)),
@@ -541,9 +564,9 @@ public partial class ProductsPage : Page
 
         cards = _sortMode switch
         {
-            "stockAsc"  => cards.OrderBy(c => _stockDataDict.GetValueOrDefault(c.Product.Id).Total).ToList(),
-            "stockDesc" => cards.OrderByDescending(c => _stockDataDict.GetValueOrDefault(c.Product.Id).Total).ToList(),
-            "valueDesc" => cards.OrderByDescending(c => _stockDataDict.GetValueOrDefault(c.Product.Id).Value).ToList(),
+            "stockAsc"  => cards.OrderBy(c => _stockDataDict!.GetValueOrDefault(c.Product.Id).Total).ToList(),
+            "stockDesc" => cards.OrderByDescending(c => _stockDataDict!.GetValueOrDefault(c.Product.Id).Total).ToList(),
+            "valueDesc" => cards.OrderByDescending(c => _stockDataDict!.GetValueOrDefault(c.Product.Id).Value).ToList(),
             _           => cards.OrderBy(c => c.Name).ToList()
         };
         ProductsList.ItemsSource = cards;

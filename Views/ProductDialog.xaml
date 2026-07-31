@@ -136,6 +136,64 @@
                                              Style="{StaticResource FormField}" Margin="0,8,0,0" FontSize="14" Height="42"
                                              Foreground="{DynamicResource HeadingTextBrush}"
                                              CaretBrush="{DynamicResource HeadingTextBrush}" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                        <Border Width="56" Height="56" CornerRadius="10" Background="#ECEFF1"
+                                                BorderBrush="{DynamicResource BorderBrushLight}" BorderThickness="1"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <Grid>
+                                                <Image x:Name="ImgPreview" Width="56" Height="56" Stretch="UniformToFill"
+                                                       Visibility="Collapsed" />
+                                                <Path x:Name="ImgPlaceholder" FlowDirection="LeftToRight" Width="24" Height="24"
+                                                      Fill="#90A4AE" Stretch="Uniform"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      Data="M4,4H7L9,2H15L17,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17M12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15Z" />
+                                            </Grid>
+                                        </Border>
+                                        <StackPanel VerticalAlignment="Center" Margin="12,0,0,0">
+                                            <Button x:Name="BtnChooseImage" Click="BtnChooseImage_Click"
+                                                    Height="34" Padding="14,0" Cursor="Hand"
+                                                    Background="#3949AB" Foreground="White" BorderThickness="0"
+                                                    FontSize="12" FontWeight="SemiBold"
+                                                    HorizontalAlignment="Left">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="b" CornerRadius="8"
+                                                                Background="{TemplateBinding Background}"
+                                                                Padding="{TemplateBinding Padding}">
+                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="b" Property="Opacity" Value="0.88" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                                اختيار صورة
+                                            </Button>
+                                            <Button x:Name="BtnRemoveImage" Click="BtnRemoveImage_Click"
+                                                    Height="30" Padding="12,0" Cursor="Hand" Margin="0,6,0,0"
+                                                    Background="Transparent" BorderThickness="0"
+                                                    FontSize="11" Foreground="#C62828"
+                                                    HorizontalAlignment="Left">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="b" CornerRadius="8"
+                                                                Background="{TemplateBinding Background}"
+                                                                Padding="{TemplateBinding Padding}">
+                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="b" Property="Background" Value="#FFEBEE" />
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                                إزالة الصورة
+                                            </Button>
+                                        </StackPanel>
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
 

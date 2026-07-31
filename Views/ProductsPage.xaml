@@ -669,19 +669,36 @@
                                             <RowDefinition Height="Auto" />
                                         </Grid.RowDefinitions>
 
-                                        <!-- Row 0: Name + Actions -->
-                                                                                <Grid Grid.Row="0">
+                                        <!-- Row 0: Image + Name + Actions -->
+                                        <Grid Grid.Row="0">
                                             <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="{Binding Name}"
+                                            <Border Grid.Column="0" Width="40" Height="40" CornerRadius="9"
+                                                    Background="#ECEFF1" BorderBrush="#E0E0E0" BorderThickness="1"
+                                                    Margin="0,0,8,0">
+                                                <Grid>
+                                                    <Border CornerRadius="9" Padding="2" ClipToBounds="False">
+                                                        <Image Source="{Binding ProductImage}" Width="36" Height="36"
+                                                               Stretch="UniformToFill" Visibility="{Binding HasImage}" />
+                                                    </Border>
+                                                    <Path FlowDirection="LeftToRight" Width="18" Height="18"
+                                                          Fill="#B0BEC5" Stretch="Uniform"
+                                                          Visibility="{Binding NoImage}"
+                                                          HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                          Data="M4,4H7L9,2H15L17,4H20A2,2 0 0,1 22,6V18A2,2 0 0,1 20,20H4A2,2 0 0,1 2,18V6A2,2 0 0,1 4,4M12,17A5,5 0 0,0 17,12A5,5 0 0,0 12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17M12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15Z" />
+                                                </Grid>
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}"
                                                        FontSize="15" FontWeight="Bold" Foreground="{DynamicResource PrimaryTextBrush}"
                                                        TextTrimming="CharacterEllipsis"
                                                        VerticalAlignment="Center" />
-                                            <Border Grid.Column="1" Width="28" Height="28" CornerRadius="7"
+                                            <Border Grid.Column="2" Width="28" Height="28" CornerRadius="7"
                                                      Background="Transparent" Cursor="Hand"
                                                      ToolTip="إضافة مخزون" Margin="2,0">
                                                 <Border.InputBindings>
@@ -700,7 +717,7 @@
                                                     </Style>
                                                 </Border.Style>
                                             </Border>
-                                            <Border Grid.Column="2" Width="28" Height="28" CornerRadius="7"
+                                            <Border Grid.Column="3" Width="28" Height="28" CornerRadius="7"
                                                     Background="Transparent" Cursor="Hand"
                                                     ToolTip="تعديل" Margin="2,0">
                                                 <Border.InputBindings>
@@ -719,7 +736,7 @@
                                                     </Style>
                                                 </Border.Style>
                                             </Border>
-                                            <Border Grid.Column="3" Width="28" Height="28" CornerRadius="7"
+                                            <Border Grid.Column="5" Width="28" Height="28" CornerRadius="7"
                                                     Background="Transparent" Cursor="Hand"
                                                     ToolTip="حذف"><Border.InputBindings>
                                                     <MouseBinding MouseAction="LeftClick" Command="{Binding DeleteCommand}" />

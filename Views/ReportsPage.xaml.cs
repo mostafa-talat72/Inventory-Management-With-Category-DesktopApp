@@ -799,6 +799,81 @@ public partial class ReportsPage : Page
         DailyTrendCard.Visibility = Visibility.Visible;
     }
 
+    private void ExportExcel_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastReportData == null || _lastReportData.Count == 0)
+        {
+            MessageBox.Show("لا توجد بيانات للتصدير. قم بعرض التقرير أولاً.", "تصدير", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var saveDialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "Excel Files (*.xlsx)|*.xlsx",
+            FileName = $"تقرير_مبيعات_{DateTime.Now:yyyyMMdd}.xlsx"
+        };
+
+        if (saveDialog.ShowDialog() != true) return;
+
+        try
+        {
+            var firstWithCarton = _lastReportData.FirstOrDefault(r => ((int)r._cartonQty) > 0);
+            var firstWithBox = _lastReportData.FirstOrDefault(r => ((int)r._boxQty) > 0);
+            var firstWithPiece = _lastReportData.FirstOrDefault(r => ((int)r._pieceQty) > 0);
+            string cartonHeader = (string)(firstWithCarton?.CartonName ?? "كرتونة");
+            string boxHeader = (string)(firstWithBox?.BoxName ?? "علبة");
+            string pieceHeader = (string)(firstWithPiece?.PieceName ?? "قطعة");
+            string[] headers =
+            {
+                "المنتج", cartonHeader, boxHeader, pieceHeader,
+                "إيراد قطاعي", "إيراد جملة", "تكلفة قطاعي", "تكلفة جملة", "الربح", "نسبة الربح"
+            };
+
+            var rows = _lastReportData
+                .Cast<dynamic>()
+                .Select(item =>
+                {
+                    string name = item.ProductName?.ToString() ?? "";
+                    int? cartonQty = (int?)item._cartonQty;
+                    int? boxQty = (int?)item._boxQty;
+                    int? pieceQty = (int?)item._pieceQty;
+                    string? retailRev = StripCurrency(item.RetailRevDisplay?.ToString());
+                    string? wholesaleRev = StripCurrency(item.WholesaleRevDisplay?.ToString());
+                    string? retailCost = StripCurrency(item.RetailCostDisplay?.ToString());
+                    string? wholesaleCost = StripCurrency(item.WholesaleCostDisplay?.ToString());
+                    string? profit = StripCurrency(item.ProfitDisplay?.ToString());
+                    string? percent = StripPercent(item.ProfitPercentDisplay?.ToString());
+                    return new object?[]
+                    {
+                        name, cartonQty, boxQty, pieceQty,
+                        retailRev, wholesaleRev, retailCost, wholesaleCost, profit, percent
+                    };
+                })
+                .ToList();
+
+            ExcelExportService.Export(saveDialog.FileName, headers, rows);
+            NotificationManager.ShowSuccess("تم تصدير التقرير إلى Excel بنجاح");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"حدث خطأ أثناء التصدير:\n{ex.Message}", "تصدير", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private static string? StripCurrency(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var cleaned = new string(value.Where(c => char.IsDigit(c) || c == '.' || c == '-').ToArray());
+        return cleaned.Length > 0 ? cleaned : value;
+    }
+
+    private static string? StripPercent(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var cleaned = new string(value.Where(c => char.IsDigit(c) || c == '.' || c == '-').ToArray());
+        return cleaned.Length > 0 ? cleaned : value;
+    }
+
     private void Export_Click(object sender, RoutedEventArgs e)
     {
         if (_lastReportData == null || _lastReportData.Count == 0)

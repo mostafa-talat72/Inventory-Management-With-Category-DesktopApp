@@ -10,7 +10,7 @@ public class BackupService
     private readonly string _dbPath;
     private DispatcherTimer? _timer;
 
-    public const int MaxBackups = 5;
+    public const int MaxBackups = 7;
 
     public BackupService(AppConfig config)
     {

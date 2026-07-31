@@ -197,51 +197,83 @@ public partial class StockMovementDialog : UserControl
             "هل أنت متأكد من حذف هذه الحركة؟\nسيتم تعديل المخزون والدفعات المرتبطة بها ولا يمكن التراجع.",
             result => {
             if (!result) return;
+            DeleteMovementCore(item.MovementId);
+        }, ConfirmDialog.DialogType.Danger, requiredText: "حذف");
+    }
 
-            var movement = _db.InventoryMovements.Find(item.MovementId);
-            if (movement == null) return;
+    private void UndoLast_Click(object sender, RoutedEventArgs e)
+    {
+        var last = _db.InventoryMovements
+            .Where(m => m.ProductId == _product.Id)
+            .OrderByDescending(m => m.CreatedAt)
+            .FirstOrDefault();
 
-            // إذا كانت الحركة إضافة مخزون، نطرح الكمية من الـ batch المرتبط
-            if (movement.MovementType == MovementType.StockIn)
+        if (last == null)
+        {
+            NotificationManager.ShowInfo("لا توجد حركات للتراجع عنها");
+            return;
+        }
+
+        if (last.ReferenceId.HasValue)
+        {
+            NotificationManager.ShowWarning("آخر حركة مرتبطة بطلب أو فاتورة ولا يمكن التراجع عنها");
+            return;
+        }
+
+        var movementId = last.Id;
+        ConfirmDialog.Show("التراجع عن آخر حركة",
+            "سيتم إلغاء آخر حركة وتحديث المخزون والدفعات.\nلا يمكن التراجع عن هذا الإجراء.",
+            result => {
+            if (!result) return;
+            DeleteMovementCore(movementId);
+        }, ConfirmDialog.DialogType.Warning, requiredText: "تراجع");
+    }
+
+    private void DeleteMovementCore(int movementId)
+    {
+        var movement = _db.InventoryMovements.Find(movementId);
+        if (movement == null) return;
+
+        // إذا كانت الحركة إضافة مخزون، نطرح الكمية من الـ batch المرتبط
+        if (movement.MovementType == MovementType.StockIn)
+        {
+            var batch = FindLinkedBatch(movement);
+            if (batch == null)
             {
-                var batch = FindLinkedBatch(movement);
-                if (batch == null)
-                {
-                    NotificationManager.ShowError("لم يتم العثور على الدفعة المرتبطة بهذه الحركة");
-                    return;
-                }
-
-                // التحقق أن المخزون المتاح كافٍ لطرح الكمية
-                if (batch.RemainingQuantity < movement.Quantity)
-                {
-                    int consumed = batch.InitialQuantity - batch.RemainingQuantity;
-                    var unitName = _db.ProductUnits.AsNoTracking()
-                        .Where(u => u.ProductId == _product.Id && u.UnitType == UnitType.Piece)
-                        .Select(u => u.Name).FirstOrDefault() ?? "قطعة";
-                    NotificationManager.ShowWarning(
-                        $"لا يمكن حذف هذه الحركة.\n" +
-                        $"تم استهلاك {consumed} {unitName} من هذه الدفعة بالفعل.\n" +
-                        $"المتبقي في الدفعة: {batch.RemainingQuantity} {unitName} فقط.");
-                    return;
-                }
-
-                // طرح الكمية من الدفعة
-                batch.RemainingQuantity -= movement.Quantity;
-                batch.InitialQuantity -= movement.Quantity;
-
-                // إذا أصبحت الدفعة فارغة تماماً احذفها
-                if (batch.InitialQuantity <= 0)
-                    _db.InventoryBatches.Remove(batch);
-                else
-                    _db.Entry(batch).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+                NotificationManager.ShowError("لم يتم العثور على الدفعة المرتبطة بهذه الحركة");
+                return;
             }
 
-            _db.InventoryMovements.Remove(movement);
-            _db.SaveChanges();
-            NotificationManager.ShowSuccess("تم حذف الحركة وتحديث المخزون بنجاح");
-            LoadSummary();
-            LoadMovements();
-        }, ConfirmDialog.DialogType.Danger, requiredText: "حذف");
+            // التحقق أن المخزون المتاح كافٍ لطرح الكمية
+            if (batch.RemainingQuantity < movement.Quantity)
+            {
+                int consumed = batch.InitialQuantity - batch.RemainingQuantity;
+                var unitName = _db.ProductUnits.AsNoTracking()
+                    .Where(u => u.ProductId == _product.Id && u.UnitType == UnitType.Piece)
+                    .Select(u => u.Name).FirstOrDefault() ?? "قطعة";
+                NotificationManager.ShowWarning(
+                    $"لا يمكن حذف هذه الحركة.\n" +
+                    $"تم استهلاك {consumed} {unitName} من هذه الدفعة بالفعل.\n" +
+                    $"المتبقي في الدفعة: {batch.RemainingQuantity} {unitName} فقط.");
+                return;
+            }
+
+            // طرح الكمية من الدفعة
+            batch.RemainingQuantity -= movement.Quantity;
+            batch.InitialQuantity -= movement.Quantity;
+
+            // إذا أصبحت الدفعة فارغة تماماً احذفها
+            if (batch.InitialQuantity <= 0)
+                _db.InventoryBatches.Remove(batch);
+            else
+                _db.Entry(batch).State = Microsoft.EntityFrameworkCore.EntityState.Modified;
+        }
+
+        _db.InventoryMovements.Remove(movement);
+        _db.SaveChanges();
+        NotificationManager.ShowSuccess("تم حذف الحركة وتحديث المخزون بنجاح");
+        LoadSummary();
+        LoadMovements();
     }
 
     /// <summary>

@@ -1,8 +1,10 @@
 using System.Globalization;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Microsoft.EntityFrameworkCore;
 using ProductApp.Data;
 using ProductApp.Models;
@@ -15,9 +17,14 @@ public partial class ProductDialog : UserControl
     public event EventHandler<bool?>? DialogClosed;
     public event EventHandler<Product>? ProductSwitchRequested;
 
+    private static readonly string ImagesFolder = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "MTE Stock", "ProductImages");
+
     private readonly AppDbContext _db;
     private readonly Product? _product;
     private readonly HashSet<string> _dirtyFields = [];
+    private string? _selectedImagePath;
     private bool _loaded;
     private bool _isUpdating;
     private int? _selectedCategoryId = null;
@@ -157,6 +164,12 @@ public partial class ProductDialog : UserControl
         TxtName.Text = _product!.Name;
         TxtDescription.Text = _product.Description;
         BtnSave.Content = "حفظ التعديلات";
+
+        if (!string.IsNullOrWhiteSpace(_product.ImagePath) && File.Exists(_product.ImagePath))
+        {
+            _selectedImagePath = _product.ImagePath;
+            ShowImagePreview(_product.ImagePath);
+        }
 
         var units = _db.ProductUnits.Where(u => u.ProductId == _product.Id).ToList();
         var piece = units.FirstOrDefault(u => u.UnitType == UnitType.Piece);
@@ -555,6 +568,7 @@ public partial class ProductDialog : UserControl
         product.Name = name;
         product.Description = TxtDescription.Text?.Trim();
         product.CategoryId = _selectedCategoryId;
+        product.ImagePath = _selectedImagePath;
         _db.SaveChanges();
 
         ProductUnit? pieceUnit = null;
@@ -640,6 +654,74 @@ public partial class ProductDialog : UserControl
 
     private static bool TryParseDecimal(string? text, out decimal value) =>
         decimal.TryParse(text?.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+
+    private void BtnChooseImage_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "اختيار صورة المنتج",
+            Filter = "صور (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif"
+        };
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            Directory.CreateDirectory(ImagesFolder);
+            var ext = Path.GetExtension(dialog.FileName).ToLowerInvariant();
+            if (string.IsNullOrEmpty(ext)) ext = ".png";
+            var dest = Path.Combine(ImagesFolder, $"{Guid.NewGuid():N}{ext}");
+            File.Copy(dialog.FileName, dest, true);
+
+            if (_selectedImagePath != null &&
+                !string.IsNullOrWhiteSpace(_product?.ImagePath) &&
+                !string.Equals(_selectedImagePath, _product.ImagePath, StringComparison.OrdinalIgnoreCase))
+            {
+                try { File.Delete(_selectedImagePath); } catch { }
+            }
+
+            _selectedImagePath = dest;
+            ShowImagePreview(dest);
+        }
+        catch (Exception ex)
+        {
+            NotificationManager.ShowError($"تعذر حفظ الصورة:\n{ex.Message}");
+        }
+    }
+
+    private void BtnRemoveImage_Click(object sender, RoutedEventArgs e)
+    {
+        if (_selectedImagePath != null &&
+            !string.Equals(_selectedImagePath, _product?.ImagePath, StringComparison.OrdinalIgnoreCase))
+        {
+            try { File.Delete(_selectedImagePath); } catch { }
+        }
+        _selectedImagePath = null;
+        ImgPreview.Source = null;
+        ImgPreview.Visibility = Visibility.Collapsed;
+        ImgPlaceholder.Visibility = Visibility.Visible;
+    }
+
+    private void ShowImagePreview(string path)
+    {
+        try
+        {
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.UriSource = new Uri(path);
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.DecodePixelWidth = 112;
+            bitmap.EndInit();
+            ImgPreview.Source = bitmap;
+            ImgPreview.Visibility = Visibility.Visible;
+            ImgPlaceholder.Visibility = Visibility.Collapsed;
+        }
+        catch
+        {
+            ImgPreview.Source = null;
+            ImgPreview.Visibility = Visibility.Collapsed;
+            ImgPlaceholder.Visibility = Visibility.Visible;
+        }
+    }
 
     private void BtnCancel_Click(object sender, RoutedEventArgs e)
     {
