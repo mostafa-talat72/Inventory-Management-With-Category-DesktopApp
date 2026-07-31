@@ -169,6 +169,7 @@ public partial class ProductDialog : UserControl
             TxtPieceName.Text = piece.Name;
             TxtPieceRetail.Text = piece.RetailPrice.ToString();
             TxtPieceWholesale.Text = piece.WholesalePrice == piece.RetailPrice ? "" : piece.WholesalePrice.ToString("0.##");
+            TxtPieceMin.Text = piece.MinStockLevel > 0 ? piece.MinStockLevel.ToString() : "";
         }
 
         ChkHasBox.IsChecked = box != null;
@@ -178,6 +179,7 @@ public partial class ProductDialog : UserControl
             TxtBoxQty.Text = box.QuantityPerParent.ToString();
             TxtBoxRetail.Text = box.RetailPrice.ToString("0.##");
             TxtBoxWholesale.Text = box.WholesalePrice == box.RetailPrice ? "" : box.WholesalePrice.ToString("0.##");
+            TxtBoxMin.Text = box.MinStockLevel > 0 ? box.MinStockLevel.ToString() : "";
         }
 
         ChkHasCarton.IsChecked = carton != null;
@@ -187,6 +189,7 @@ public partial class ProductDialog : UserControl
             TxtCartonQty.Text = carton.QuantityPerParent.ToString();
             TxtCartonRetail.Text = carton.RetailPrice.ToString("0.##");
             TxtCartonWholesale.Text = carton.WholesalePrice == carton.RetailPrice ? "" : carton.WholesalePrice.ToString("0.##");
+            TxtCartonMin.Text = carton.MinStockLevel > 0 ? carton.MinStockLevel.ToString() : "";
 
             bool hasBox = units.Any(u => u.UnitType == UnitType.Box && u.ParentUnitId == carton.Id);
         }
@@ -316,6 +319,10 @@ public partial class ProductDialog : UserControl
                 TxtCartonHint.Visibility = Visibility.Visible;
             }
         }
+
+        PieceMinField.Visibility = hasPiece ? Visibility.Visible : Visibility.Collapsed;
+        BoxMinField.Visibility = hasBox ? Visibility.Visible : Visibility.Collapsed;
+        CartonMinField.Visibility = hasCarton ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private string PieceName => string.IsNullOrWhiteSpace(TxtPieceName?.Text) ? "قطعة" : TxtPieceName.Text.Trim();
@@ -332,6 +339,12 @@ public partial class ProductDialog : UserControl
         TxtPieceTitle.Text = PieceName;
         TxtBoxTitle.Text = BoxName;
         TxtCartonTitle.Text = CartonName;
+        if (TxtPieceMinLabel != null)
+            TxtPieceMinLabel.Text = $"({PieceName}):";
+        if (TxtBoxMinLabel != null)
+            TxtBoxMinLabel.Text = $"({BoxName}):";
+        if (TxtCartonMinLabel != null)
+            TxtCartonMinLabel.Text = $"({CartonName}):";
         UpdatePieceDependentFields();
     }
 
@@ -559,6 +572,7 @@ public partial class ProductDialog : UserControl
                 UnitType = UnitType.Piece,
                 RetailPrice = pieceRetail,
                 WholesalePrice = pieceWholesale,
+                MinStockLevel = int.TryParse(TxtPieceMin.Text?.Trim(), out int pieceMin) && pieceMin > 0 ? pieceMin : 0,
                 IsBaseUnit = !hasBox && !hasCarton,
                 QuantityPerParent = 1
             };
@@ -578,6 +592,7 @@ public partial class ProductDialog : UserControl
                 UnitType = UnitType.Box,
                 RetailPrice = boxRetail,
                 WholesalePrice = boxWholesale,
+                MinStockLevel = int.TryParse(TxtBoxMin.Text?.Trim(), out int boxMin) && boxMin > 0 ? boxMin : 0,
                 QuantityPerParent = boxQtyValid ? boxQty : 1,
                 IsBaseUnit = !hasPiece && !hasCarton
             };
@@ -597,6 +612,7 @@ public partial class ProductDialog : UserControl
                 UnitType = UnitType.Carton,
                 RetailPrice = cartonRetail,
                 WholesalePrice = cartonWholesale,
+                MinStockLevel = int.TryParse(TxtCartonMin.Text?.Trim(), out int cartonMin) && cartonMin > 0 ? cartonMin : 0,
                 QuantityPerParent = cartonQtyValid ? cartonQty : 1,
                 IsBaseUnit = !hasPiece && !hasBox
             };

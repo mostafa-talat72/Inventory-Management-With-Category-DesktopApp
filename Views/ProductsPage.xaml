@@ -4,6 +4,7 @@
       xmlns:wm="clr-namespace:ProductApp.Converters"
       Title="المنتجات"
       FlowDirection="RightToLeft"
+      KeyDown="Page_KeyDown"
       Background="{DynamicResource AppBackground}">
 
     <Grid>
@@ -430,7 +431,18 @@
                         <ColumnDefinition Width="12" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Border Grid.Column="0" CornerRadius="14" Background="{DynamicResource CardBackground}" Padding="20,16">
+                    <Border Grid.Column="0" CornerRadius="14" Background="{DynamicResource CardBackground}" Padding="20,16"
+                            Cursor="Hand" ToolTip="إظهار جميع المنتجات (إلغاء كل الفلاتر)"
+                            MouseLeftButtonUp="StatTotalProducts_Click">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -447,7 +459,18 @@
                             </StackPanel>
                         </Grid>
                     </Border>
-                    <Border Grid.Column="2" CornerRadius="14" Background="{DynamicResource CardBackground}" Padding="20,16">
+                    <Border Grid.Column="2" CornerRadius="14" Background="{DynamicResource CardBackground}" Padding="20,16"
+                            Cursor="Hand" ToolTip="ترتيب المنتجات حسب المخزون"
+                            MouseLeftButtonUp="StatTotalStock_Click">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -464,7 +487,18 @@
                             </StackPanel>
                         </Grid>
                     </Border>
-                    <Border Grid.Column="4" CornerRadius="14" Background="{DynamicResource CardBackground}" Padding="20,16">
+                    <Border Grid.Column="4" CornerRadius="14" Background="{DynamicResource CardBackground}" Padding="20,16"
+                            Cursor="Hand" ToolTip="عرض المنتجات المنخفضة فقط"
+                            MouseLeftButtonUp="StatLowStock_Click">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -481,7 +515,18 @@
                             </StackPanel>
                         </Grid>
                     </Border>
-                    <Border Grid.Column="6" CornerRadius="14" Background="{DynamicResource CardBackground}" Padding="20,16">
+                    <Border Grid.Column="6" CornerRadius="14" Background="{DynamicResource CardBackground}" Padding="20,16"
+                            Cursor="Hand" ToolTip="ترتيب المنتجات حسب قيمة المخزون"
+                            MouseLeftButtonUp="StatStockValue_Click">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="{DynamicResource SurfaceBackground}" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
@@ -530,8 +575,18 @@
                                          VerticalAlignment="Center" />
                             </Grid>
                         </Border>
+                        <!-- ترتيب المنتجات -->
+                        <ComboBox Grid.Column="1" x:Name="CmbSort" Height="42" Width="160" FontSize="12"
+                                  Margin="12,0,0,0" VerticalContentAlignment="Center"
+                                  SelectionChanged="CmbSort_SelectionChanged"
+                                  ToolTip="ترتيب المنتجات">
+                            <ComboBoxItem Content="الترتيب: الاسم" IsSelected="True" />
+                            <ComboBoxItem Content="المخزون: الأقل أولاً" />
+                            <ComboBoxItem Content="المخزون: الأعلى أولاً" />
+                            <ComboBoxItem Content="القيمة: الأعلى أولاً" />
+                        </ComboBox>
                         <!-- فلتر المنتجات المنخفضة -->
-                        <ToggleButton Grid.Column="1" x:Name="TglLowStockOnly" Cursor="Hand" Height="42"
+                        <ToggleButton Grid.Column="2" x:Name="TglLowStockOnly" Cursor="Hand" Height="42"
                                       Margin="12,0,0,0"
                                       Checked="TglLowStockOnly_Changed" Unchecked="TglLowStockOnly_Changed"
                                       ToolTip="عرض المنتجات المنخفضة فقط">
@@ -571,18 +626,20 @@
                     <Border.Effect>
                         <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.05" Color="#000" />
                     </Border.Effect>
-                    <ItemsControl x:Name="ProductsList" Focusable="False"
-                                  HorizontalAlignment="Center">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <WrapPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Width="248" Height="240" Margin="7" CornerRadius="14"
-                                        Background="{DynamicResource CardBackground}" BorderBrush="#EDEDED" BorderThickness="1"
-                                        Cursor="Hand">
+                    <Grid>
+                        <ItemsControl x:Name="ProductsList" Focusable="False"
+                                      HorizontalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="248" Height="240" Margin="7" CornerRadius="14"
+                                            Background="{DynamicResource CardBackground}" BorderBrush="#EDEDED" BorderThickness="1"
+                                            Cursor="Hand" Tag="{Binding Product}"
+                                            MouseEnter="ProductCard_MouseEnter">
                                     <Border.InputBindings>
                                         <MouseBinding MouseAction="LeftClick" Command="{Binding SelectCommand}" />
                                     </Border.InputBindings>
@@ -683,11 +740,22 @@
                                         </Grid>
 
                                         <!-- Row 1: Units path -->
-                                        <Border Grid.Row="1" CornerRadius="5" Background="{DynamicResource CardBackgroundAlt}"
-                                                Padding="8,4" Margin="0,8,0,0">
-                                            <TextBlock Text="{Binding UnitsDisplay}" FontSize="10"
-                                                       Foreground="{DynamicResource SubtleTextBrush}" TextTrimming="CharacterEllipsis" />
-                                        </Border>
+                                        <Grid Grid.Row="1" Margin="0,8,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0" CornerRadius="5" Background="{DynamicResource CardBackgroundAlt}"
+                                                    Padding="8,4">
+                                                <TextBlock Text="{Binding UnitsDisplay}" FontSize="10"
+                                                           Foreground="{DynamicResource SubtleTextBrush}" TextTrimming="CharacterEllipsis" />
+                                            </Border>
+                                            <Border Grid.Column="1" CornerRadius="5" Padding="8,4" Margin="6,0,0,0"
+                                                    Background="{Binding BadgeBg}" Visibility="{Binding HasBadge}">
+                                                <TextBlock Text="{Binding BadgeText}" FontSize="10" FontWeight="Bold"
+                                                           Foreground="{Binding BadgeFg}" />
+                                            </Border>
+                                        </Grid>
 
                                         <!-- Row 2: Stock + Value -->
                                         <Grid Grid.Row="2" Margin="0,8,0,0">
@@ -722,10 +790,11 @@
 
                                         <!-- Row 3: Prices -->
                                         <Grid Grid.Row="3" Margin="0,10,0,0">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="*" />
-                                            </Grid.ColumnDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
                                             <Border Grid.Column="0" CornerRadius="6" Background="#F0F0FF" Padding="8,4" Margin="0,0,3,0">
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                                                     <TextBlock Text="قطاعي:" FontSize="9" Foreground="{DynamicResource MutedTextBrush}" VerticalAlignment="Center" />
@@ -801,6 +870,16 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <StackPanel x:Name="TxtEmptyProducts" Visibility="Collapsed"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,30">
+                        <Path FlowDirection="LeftToRight" Width="40" Height="40" Fill="#B0BEC5" Stretch="Uniform"
+                              HorizontalAlignment="Center"
+                              Data="M12,2C6.47,2 2,6.47 2,12C2,17.53 6.47,22 12,22C17.53,22 22,17.53 22,12C22,6.47 17.53,2 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M13,6H11V7H13V6M13,8H11V17H13V8Z" />
+                        <TextBlock Text="لا توجد منتجات مطابقة" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource MutedTextBrush}" HorizontalAlignment="Center"
+                                   Margin="0,10,0,0" />
+                    </StackPanel>
+                </Grid>
                 </Border>
             </StackPanel>
         </ScrollViewer>

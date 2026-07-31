@@ -89,6 +89,22 @@ CREATE TABLE IF NOT EXISTS Categories (
                 alter.ExecuteNonQuery();
             }
         }
+
+        // 4) MinStockLevel column in ProductUnits
+        using (var checkMin = conn.CreateCommand())
+        {
+            checkMin.CommandText = "PRAGMA table_info(ProductUnits)";
+            using var reader = checkMin.ExecuteReader();
+            var hasMinCol = false;
+            while (reader.Read())
+                if ((string)reader["name"] == "MinStockLevel") { hasMinCol = true; break; }
+            if (!hasMinCol)
+            {
+                using var alter = conn.CreateCommand();
+                alter.CommandText = "ALTER TABLE ProductUnits ADD COLUMN MinStockLevel INTEGER NOT NULL DEFAULT 0";
+                alter.ExecuteNonQuery();
+            }
+        }
     }
 
     protected override void OnModelCreating(ModelBuilder model)

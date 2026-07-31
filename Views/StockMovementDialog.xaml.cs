@@ -193,7 +193,9 @@ public partial class StockMovementDialog : UserControl
         if (((FrameworkElement)sender).DataContext is not MovementItem item) return;
         if (!item.CanDelete) return;
 
-        ConfirmDialog.Show("تأكيد الحذف", "هل أنت متأكد من حذف هذه الحركة؟", result => {
+        ConfirmDialog.Show("تأكيد الحذف",
+            "هل أنت متأكد من حذف هذه الحركة؟\nسيتم تعديل المخزون والدفعات المرتبطة بها ولا يمكن التراجع.",
+            result => {
             if (!result) return;
 
             var movement = _db.InventoryMovements.Find(item.MovementId);
@@ -239,7 +241,7 @@ public partial class StockMovementDialog : UserControl
             NotificationManager.ShowSuccess("تم حذف الحركة وتحديث المخزون بنجاح");
             LoadSummary();
             LoadMovements();
-        }, ConfirmDialog.DialogType.Danger);
+        }, ConfirmDialog.DialogType.Danger, requiredText: "حذف");
     }
 
     /// <summary>

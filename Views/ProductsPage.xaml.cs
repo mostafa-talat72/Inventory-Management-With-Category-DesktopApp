@@ -24,10 +24,35 @@ public partial class ProductsPage : Page
     private bool _loaded;
     private bool _isLoading;
     private bool _lowStockOnly;
+    private string _sortMode = "name";
+    private Product? _activeProduct;
     private List<Product>? _allProducts;
     private Dictionary<int, (int Total, decimal Value)>? _stockDataDict;
     private decimal _totalStockValue;
     private int? _selectedCategoryId;
+
+    private class ProductCardItem
+    {
+        public required string Name { get; init; }
+        public required string UnitsDisplay { get; init; }
+        public required string StockDisplay { get; init; }
+        public required string StockBgColor { get; init; }
+        public required string StockFgColor { get; init; }
+        public required string StockValueDisplay { get; init; }
+        public required string RetailDisplay { get; init; }
+        public required string WholesaleDisplay { get; init; }
+        public required string BadgeText { get; init; }
+        public required string BadgeBg { get; init; }
+        public required string BadgeFg { get; init; }
+        public required string HasBadge { get; init; }
+        public required Product Product { get; init; }
+        public required ICommand SelectCommand { get; init; }
+        public required ICommand AddStockCommand { get; init; }
+        public required ICommand DeductStockCommand { get; init; }
+        public required ICommand HistoryCommand { get; init; }
+        public required ICommand EditCommand { get; init; }
+        public required ICommand DeleteCommand { get; init; }
+    }
 
     private class CategoryCardItem : INotifyPropertyChanged
     {
@@ -215,6 +240,117 @@ public partial class ProductsPage : Page
         LoadProducts();
     }
 
+    private void CmbSort_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        _sortMode = CmbSort.SelectedIndex switch
+        {
+            1 => "stockAsc",
+            2 => "stockDesc",
+            3 => "valueDesc",
+            _ => "name"
+        };
+        LoadProducts();
+    }
+
+    private void ProductCard_MouseEnter(object sender, MouseEventArgs e)
+    {
+        _activeProduct = ((FrameworkElement)sender).Tag as Product;
+    }
+
+    private void Page_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.F)
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+            e.Handled = true;
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.N)
+        {
+            OpenProductDialog(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.F2 && _activeProduct != null && Keyboard.FocusedElement is not TextBox)
+        {
+            OpenEditDialog(_activeProduct);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Delete && _activeProduct != null && Keyboard.FocusedElement is not TextBox)
+        {
+            DeleteProduct(_activeProduct);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && SearchBox.Text.Length > 0)
+        {
+            SearchBox.Text = "";
+            _currentSearch = null;
+            e.Handled = true;
+        }
+    }
+
+    private void ClearCategorySelection()
+    {
+        _selectedCategoryId = null;
+        foreach (var c in _categoryCards) c.IsSelected = false;
+        SetAllProductsCardState(true);
+    }
+
+    private void SetLowFilter(bool on)
+    {
+        TglLowStockOnly.Checked -= TglLowStockOnly_Changed;
+        TglLowStockOnly.Unchecked -= TglLowStockOnly_Changed;
+        TglLowStockOnly.IsChecked = on;
+        TglLowStockOnly.Checked += TglLowStockOnly_Changed;
+        TglLowStockOnly.Unchecked += TglLowStockOnly_Changed;
+        _lowStockOnly = on;
+    }
+
+    private void SetSortMode(string mode, int comboIndex)
+    {
+        _sortMode = mode;
+        CmbSort.SelectedIndex = comboIndex;
+    }
+
+    private void StatTotalProducts_Click(object sender, MouseButtonEventArgs e)
+    {
+        ClearCategorySelection();
+        SearchBox.Text = "";
+        _currentSearch = null;
+        SetLowFilter(false);
+        SetSortMode("name", 0);
+        LoadProducts();
+    }
+
+    private void StatTotalStock_Click(object sender, MouseButtonEventArgs e)
+    {
+        ClearCategorySelection();
+        SearchBox.Text = "";
+        _currentSearch = null;
+        SetLowFilter(false);
+        SetSortMode("stockDesc", 2);
+        LoadProducts();
+    }
+
+    private void StatLowStock_Click(object sender, MouseButtonEventArgs e)
+    {
+        ClearCategorySelection();
+        SearchBox.Text = "";
+        _currentSearch = null;
+        SetLowFilter(true);
+        LoadProducts();
+    }
+
+    private void StatStockValue_Click(object sender, MouseButtonEventArgs e)
+    {
+        ClearCategorySelection();
+        SearchBox.Text = "";
+        _currentSearch = null;
+        SetLowFilter(false);
+        SetSortMode("valueDesc", 3);
+        LoadProducts();
+    }
+
     private void FilterCategoryCards(string filter)
     {
         _categoryCards.Clear();
@@ -300,11 +436,6 @@ public partial class ProductsPage : Page
                 .Select(g => new { ProductId = g.Key, Total = g.Sum(b => b.RemainingQuantity), Value = g.Sum(b => (decimal)b.RemainingQuantity * b.CostPricePerPiece) })
                 .ToDictionary(x => x.ProductId, x => (Total: x.Total, Value: x.Value));
 
-            if (_lowStockOnly)
-                _allProducts = _allProducts
-                    .Where(p => _stockDataDict.GetValueOrDefault(p.Id).Total <= 0)
-                    .ToList();
-
             var inv = new InventoryService(_db);
             var totalStockPieces = 0;
             var lowStockCount = 0;
@@ -315,17 +446,38 @@ public partial class ProductsPage : Page
                 var data = _stockDataDict.GetValueOrDefault(p.Id);
                 totalStockPieces += data.Total;
                 _totalStockValue  += data.Value;
-                if (data.Total <= 0) lowStockCount++;
+                if (IsLowStock(p, data.Total)) lowStockCount++;
             }
 
             TxtTotalProducts.Text = _allProducts.Count.ToString();
             TxtTotalStock.Text    = totalStockPieces.ToString("0");
             TxtLowStock.Text      = lowStockCount.ToString();
 
+            if (_lowStockOnly)
+                _allProducts = _allProducts
+                    .Where(p => IsLowStock(p, _stockDataDict.GetValueOrDefault(p.Id).Total))
+                    .ToList();
+
             BuildProductCards();
             ApplyAmountsMask();
+
+            TxtEmptyProducts.Visibility = _allProducts.Count == 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
         finally { _isLoading = false; }
+    }
+
+    private static bool IsLowStock(Product p, int totalPieces)
+    {
+        if (totalPieces <= 0) return true;
+        foreach (var u in p.Units)
+        {
+            if (u.MinStockLevel <= 0) continue;
+            int unitStock = u.QuantityPerParent > 0 ? totalPieces / u.QuantityPerParent : totalPieces;
+            if (unitStock <= u.MinStockLevel) return true;
+        }
+        return false;
     }
 
     private List<int> GetCategoryAndDescendantIds(int catId)
@@ -343,7 +495,7 @@ public partial class ProductsPage : Page
         bool hidden = AmountsVisibilityService.IsHidden;
 
         var inv = new InventoryService(_db);
-        var cards = new List<object>();
+        var cards = new List<ProductCardItem>();
         foreach (var p in _allProducts!)
         {
             var units = p.Units.OrderBy(u => u.UnitType).ToList();
@@ -357,25 +509,43 @@ public partial class ProductsPage : Page
                 ? ("#FFEBEE", "#C62828")
                 : ("#E8F5E9", "#2E7D32");
 
-            cards.Add(new
+            var (badgeText, badgeBg, badgeFg, badgeVisibility) = stockPieces <= 0
+                ? ("نفد المخزون", "#EF5350", "White", "Visible")
+                : IsLowStock(p, stockPieces)
+                    ? ("منخفض", "#FFA726", "#4E342E", "Visible")
+                    : ("", "", "", "Collapsed");
+
+            cards.Add(new ProductCardItem
             {
-                p.Name,
-                UnitsDisplay      = string.Join(" → ", units.Select(u => u.Name)),
-                StockDisplay      = stockDisplay,
-                StockBgColor      = stockBg,
-                StockFgColor      = stockFg,
+                Name = p.Name,
+                UnitsDisplay = string.Join(" → ", units.Select(u => u.Name)),
+                StockDisplay = stockDisplay,
+                StockBgColor = stockBg,
+                StockFgColor = stockFg,
                 StockValueDisplay = hidden ? mask : $"{stockValue:0.##} ج.م",
-                RetailDisplay     = units.Count > 0 ? units.Min(u => u.RetailPrice).ToString("0.##")    : "-",
-                WholesaleDisplay  = units.Count > 0 ? units.Min(u => u.WholesalePrice).ToString("0.##") : "-",
-                Product           = p,
-                SelectCommand     = new RelayCommand(() => OpenUnitLevelsDialog(p)),
-                AddStockCommand   = new RelayCommand(() => OpenStockInForProduct(p)),
+                RetailDisplay = units.Count > 0 ? units.Min(u => u.RetailPrice).ToString("0.##") : "-",
+                WholesaleDisplay = units.Count > 0 ? units.Min(u => u.WholesalePrice).ToString("0.##") : "-",
+                BadgeText = badgeText,
+                BadgeBg = badgeBg,
+                BadgeFg = badgeFg,
+                HasBadge = badgeVisibility,
+                Product = p,
+                SelectCommand = new RelayCommand(() => OpenUnitLevelsDialog(p)),
+                AddStockCommand = new RelayCommand(() => OpenStockInForProduct(p)),
                 DeductStockCommand = new RelayCommand(() => OpenStockDeductionForProduct(p)),
-                HistoryCommand    = new RelayCommand(() => OpenStockMovementForProduct(p)),
-                EditCommand       = new RelayCommand(() => OpenEditDialog(p)),
-                DeleteCommand     = new RelayCommand(() => DeleteProduct(p))
+                HistoryCommand = new RelayCommand(() => OpenStockMovementForProduct(p)),
+                EditCommand = new RelayCommand(() => OpenEditDialog(p)),
+                DeleteCommand = new RelayCommand(() => DeleteProduct(p))
             });
         }
+
+        cards = _sortMode switch
+        {
+            "stockAsc"  => cards.OrderBy(c => _stockDataDict.GetValueOrDefault(c.Product.Id).Total).ToList(),
+            "stockDesc" => cards.OrderByDescending(c => _stockDataDict.GetValueOrDefault(c.Product.Id).Total).ToList(),
+            "valueDesc" => cards.OrderByDescending(c => _stockDataDict.GetValueOrDefault(c.Product.Id).Value).ToList(),
+            _           => cards.OrderBy(c => c.Name).ToList()
+        };
         ProductsList.ItemsSource = cards;
     }
 
