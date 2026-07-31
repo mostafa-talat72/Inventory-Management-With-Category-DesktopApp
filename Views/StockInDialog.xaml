@@ -375,7 +375,7 @@
                                                             Background="{DynamicResource SurfaceBackground}" Padding="8,6" Margin="0,0,6,0"
                                                             Visibility="{Binding HasCarton, Converter={StaticResource B2V}}">
                                                         <StackPanel>
-                                                            <TextBlock Text="كرتونة" FontSize="10" FontWeight="SemiBold"
+                                                            <TextBlock Text="{Binding CartonName}" FontSize="10" FontWeight="SemiBold"
                                                                        Foreground="{DynamicResource SubtleTextBrush}"
                                                                        HorizontalAlignment="Center" />
                                                             <Border CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}"
@@ -395,7 +395,7 @@
                                                             Background="{DynamicResource SurfaceBackground}" Padding="8,6" Margin="0,0,6,0"
                                                             Visibility="{Binding HasBox, Converter={StaticResource B2V}}">
                                                         <StackPanel>
-                                                            <TextBlock Text="علبة" FontSize="10" FontWeight="SemiBold"
+                                                            <TextBlock Text="{Binding BoxName}" FontSize="10" FontWeight="SemiBold"
                                                                        Foreground="{DynamicResource SubtleTextBrush}"
                                                                        HorizontalAlignment="Center" />
                                                             <Border CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}"
@@ -415,7 +415,7 @@
                                                             Background="{DynamicResource SurfaceBackground}" Padding="8,6" Margin="0,0,6,0"
                                                             Visibility="{Binding HasPiece, Converter={StaticResource B2V}}">
                                                         <StackPanel>
-                                                            <TextBlock Text="قطعة" FontSize="10" FontWeight="SemiBold"
+                                                            <TextBlock Text="{Binding PieceName}" FontSize="10" FontWeight="SemiBold"
                                                                        Foreground="{DynamicResource SubtleTextBrush}"
                                                                        HorizontalAlignment="Center" />
                                                             <Border CornerRadius="4" BorderBrush="{DynamicResource BorderBrush}"

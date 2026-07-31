@@ -213,10 +213,13 @@ public partial class StockMovementDialog : UserControl
                 if (batch.RemainingQuantity < movement.Quantity)
                 {
                     int consumed = batch.InitialQuantity - batch.RemainingQuantity;
+                    var unitName = _db.ProductUnits.AsNoTracking()
+                        .Where(u => u.ProductId == _product.Id && u.UnitType == UnitType.Piece)
+                        .Select(u => u.Name).FirstOrDefault() ?? "قطعة";
                     NotificationManager.ShowWarning(
                         $"لا يمكن حذف هذه الحركة.\n" +
-                        $"تم استهلاك {consumed} قطعة من هذه الدفعة بالفعل.\n" +
-                        $"المتبقي في الدفعة: {batch.RemainingQuantity} قطعة فقط.");
+                        $"تم استهلاك {consumed} {unitName} من هذه الدفعة بالفعل.\n" +
+                        $"المتبقي في الدفعة: {batch.RemainingQuantity} {unitName} فقط.");
                     return;
                 }
 
@@ -273,6 +276,10 @@ public partial class StockMovementDialog : UserControl
         int ppb = _inv.GetPiecesPerBox(_product);
         int bpc = _inv.GetBoxesPerCarton(_product);
 
+        var cartonName = units.FirstOrDefault(u => u.UnitType == UnitType.Carton)?.Name ?? "كرتونة";
+        var boxName = units.FirstOrDefault(u => u.UnitType == UnitType.Box)?.Name ?? "علبة";
+        var pieceName = units.FirstOrDefault(u => u.UnitType == UnitType.Piece)?.Name ?? "قطعة";
+
         var parts = new List<string>();
 
         if (hasCarton && hasBox && hasPiece)
@@ -281,42 +288,42 @@ public partial class StockMovementDialog : UserControl
             int afterCartons = totalPieces % ppc;
             int boxes = afterCartons / ppb;
             int pieces = afterCartons % ppb;
-            if (cartons > 0) parts.Add($"{cartons} كرتونة");
-            if (boxes > 0) parts.Add($"{boxes} علبة");
-            if (pieces > 0) parts.Add($"{pieces} قطعة");
+            if (cartons > 0) parts.Add($"{cartons} {cartonName}");
+            if (boxes > 0) parts.Add($"{boxes} {boxName}");
+            if (pieces > 0) parts.Add($"{pieces} {pieceName}");
         }
         else if (hasCarton && hasBox && !hasPiece)
         {
             int cartons = totalPieces / bpc;
             int remBoxes = totalPieces % bpc;
-            if (cartons > 0) parts.Add($"{cartons} كرتونة");
-            if (remBoxes > 0) parts.Add($"{remBoxes} علبة");
+            if (cartons > 0) parts.Add($"{cartons} {cartonName}");
+            if (remBoxes > 0) parts.Add($"{remBoxes} {boxName}");
         }
         else if (hasCarton && !hasBox && hasPiece)
         {
             int cartons = totalPieces / ppc;
             int pieces = totalPieces % ppc;
-            if (cartons > 0) parts.Add($"{cartons} كرتونة");
-            if (pieces > 0) parts.Add($"{pieces} قطعة");
+            if (cartons > 0) parts.Add($"{cartons} {cartonName}");
+            if (pieces > 0) parts.Add($"{pieces} {pieceName}");
         }
         else if (hasCarton && !hasBox && !hasPiece)
         {
-            if (totalPieces > 0) parts.Add($"{totalPieces} كرتونة");
+            if (totalPieces > 0) parts.Add($"{totalPieces} {cartonName}");
         }
         else if (!hasCarton && hasBox && hasPiece)
         {
             int boxes = totalPieces / ppb;
             int pieces = totalPieces % ppb;
-            if (boxes > 0) parts.Add($"{boxes} علبة");
-            if (pieces > 0) parts.Add($"{pieces} قطعة");
+            if (boxes > 0) parts.Add($"{boxes} {boxName}");
+            if (pieces > 0) parts.Add($"{pieces} {pieceName}");
         }
         else if (!hasCarton && hasBox && !hasPiece)
         {
-            if (totalPieces > 0) parts.Add($"{totalPieces} علبة");
+            if (totalPieces > 0) parts.Add($"{totalPieces} {boxName}");
         }
         else
         {
-            if (totalPieces > 0) parts.Add($"{totalPieces} قطعة");
+            if (totalPieces > 0) parts.Add($"{totalPieces} {pieceName}");
         }
 
         return parts.Count > 0 ? string.Join(", ", parts) : "0";

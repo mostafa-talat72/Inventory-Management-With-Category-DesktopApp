@@ -535,9 +535,9 @@ namespace ProductApp.Views
             });
             Grid.SetColumn(retailGrid.Children[^1], rCol++);
 
-            if (cartonUnit != null) { var s = MakeQtyField("كرتونة", out var tb, inputBg, headingFg, cardBorder); entry.RetailCartonTb = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, rCol++); retailGrid.Children.Add(s); }
-            if (boxUnit != null)    { var s = MakeQtyField("علبة",   out var tb, inputBg, headingFg, cardBorder); entry.RetailBoxTb    = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, rCol++); retailGrid.Children.Add(s); }
-            if (pieceUnit != null)  { var s = MakeQtyField("قطعة",   out var tb, inputBg, headingFg, cardBorder); entry.RetailPieceTb  = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, rCol++); retailGrid.Children.Add(s); }
+            if (cartonUnit != null) { var s = MakeQtyField(cartonUnit.Name, out var tb, inputBg, headingFg, cardBorder); entry.RetailCartonTb = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, rCol++); retailGrid.Children.Add(s); }
+            if (boxUnit != null)    { var s = MakeQtyField(boxUnit.Name,   out var tb, inputBg, headingFg, cardBorder); entry.RetailBoxTb    = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, rCol++); retailGrid.Children.Add(s); }
+            if (pieceUnit != null)  { var s = MakeQtyField(pieceUnit.Name, out var tb, inputBg, headingFg, cardBorder); entry.RetailPieceTb  = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, rCol++); retailGrid.Children.Add(s); }
             retailBorder.Child = retailGrid;
             Grid.SetRow(retailBorder, 1);
             mainGrid.Children.Add(retailBorder);
@@ -569,9 +569,9 @@ namespace ProductApp.Views
             });
             Grid.SetColumn(wholesaleGrid.Children[^1], wCol++);
 
-            if (cartonUnit != null) { var s = MakeQtyField("كرتونة", out var tb, inputBg, headingFg, cardBorder); entry.WholesaleCartonTb = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, wCol++); wholesaleGrid.Children.Add(s); }
-            if (boxUnit != null)    { var s = MakeQtyField("علبة",   out var tb, inputBg, headingFg, cardBorder); entry.WholesaleBoxTb    = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, wCol++); wholesaleGrid.Children.Add(s); }
-            if (pieceUnit != null)  { var s = MakeQtyField("قطعة",   out var tb, inputBg, headingFg, cardBorder); entry.WholesalePieceTb  = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, wCol++); wholesaleGrid.Children.Add(s); }
+            if (cartonUnit != null) { var s = MakeQtyField(cartonUnit.Name, out var tb, inputBg, headingFg, cardBorder); entry.WholesaleCartonTb = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, wCol++); wholesaleGrid.Children.Add(s); }
+            if (boxUnit != null)    { var s = MakeQtyField(boxUnit.Name,   out var tb, inputBg, headingFg, cardBorder); entry.WholesaleBoxTb    = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, wCol++); wholesaleGrid.Children.Add(s); }
+            if (pieceUnit != null)  { var s = MakeQtyField(pieceUnit.Name, out var tb, inputBg, headingFg, cardBorder); entry.WholesalePieceTb  = tb; tb.TextChanged += RecalcAll; Grid.SetColumn(s, wCol++); wholesaleGrid.Children.Add(s); }
             wholesaleBorder.Child = wholesaleGrid;
             Grid.SetRow(wholesaleBorder, 2);
             mainGrid.Children.Add(wholesaleBorder);

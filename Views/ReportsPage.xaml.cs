@@ -72,7 +72,7 @@ public partial class ReportsPage : Page
             .ToList();
 
         var items = _db.OrderItems
-            .Include(oi => oi.Product)
+            .Include(oi => oi.Product).ThenInclude(p => p.Units)
             .Where(oi => oi.Order != null && invoiceIds.Contains(oi.Order.InvoiceId))
             .ToList();
 
@@ -135,12 +135,17 @@ public partial class ReportsPage : Page
             var totalBoxes = g.Sum(i => i.BoxQuantity);
             var totalPieces = g.Sum(i => i.PieceQuantity);
 
+            var productUnits = g.First().Product.Units.ToList();
+            var cartonName = productUnits.FirstOrDefault(u => u.UnitType == UnitType.Carton)?.Name ?? "كرتونة";
+            var boxName = productUnits.FirstOrDefault(u => u.UnitType == UnitType.Box)?.Name ?? "علبة";
+            var pieceName = productUnits.FirstOrDefault(u => u.UnitType == UnitType.Piece)?.Name ?? "قطعة";
+
             return new
             {
                 ProductName = g.Key,
-                CartonDisplay = totalCartons > 0 ? $"كرتونة: {totalCartons:0}" : "",
-                BoxDisplay = totalBoxes > 0 ? $"علبة: {totalBoxes:0}" : "",
-                PieceDisplay = totalPieces > 0 ? $"قطعة: {totalPieces:0}" : "",
+                CartonDisplay = totalCartons > 0 ? $"{cartonName}: {totalCartons:0}" : "",
+                BoxDisplay = totalBoxes > 0 ? $"{boxName}: {totalBoxes:0}" : "",
+                PieceDisplay = totalPieces > 0 ? $"{pieceName}: {totalPieces:0}" : "",
                 RetailRevDisplay = retailRevenue > 0 ? $"قطاعي: {retailRevenue:0.##} ج.م" : "",
                 WholesaleRevDisplay = wholesaleRevenue > 0 ? $"جملة: {wholesaleRevenue:0.##} ج.م" : "",
                 RetailCostDisplay = retailCost > 0 ? $"قطاعي: {retailCost:0.##} ج.م" : "",
@@ -152,6 +157,9 @@ public partial class ReportsPage : Page
                 _cartonQty = totalCartons,
                 _boxQty = totalBoxes,
                 _pieceQty = totalPieces,
+                CartonName = cartonName,
+                BoxName = boxName,
+                PieceName = pieceName,
                 _retailRev = retailRevenue,
                 _wholesaleRev = wholesaleRevenue,
                 _retailCost = retailCost,
@@ -187,11 +195,15 @@ public partial class ReportsPage : Page
         var netCost = (footerRetailCost + footerWholesaleCost) + totalDiscount + deductionCost;
         var netProfit = totalProfit;
 
-        TxtFooterCarton.Text = footerCarton > 0 ? "كرتونة: " + footerCarton.ToString("0") : "";
+        var footerCartonName = reportData.FirstOrDefault(r => (int)r._cartonQty > 0)?.CartonName ?? "كرتونة";
+        var footerBoxName = reportData.FirstOrDefault(r => (int)r._boxQty > 0)?.BoxName ?? "علبة";
+        var footerPieceName = reportData.FirstOrDefault(r => (int)r._pieceQty > 0)?.PieceName ?? "قطعة";
+
+        TxtFooterCarton.Text = footerCarton > 0 ? $"{footerCartonName}: {footerCarton:0}" : "";
         TxtFooterCarton.Visibility = footerCarton > 0 ? Visibility.Visible : Visibility.Collapsed;
-        TxtFooterBox.Text = footerBox > 0 ? "علبة: " + footerBox.ToString("0") : "";
+        TxtFooterBox.Text = footerBox > 0 ? $"{footerBoxName}: {footerBox:0}" : "";
         TxtFooterBox.Visibility = footerBox > 0 ? Visibility.Visible : Visibility.Collapsed;
-        TxtFooterPiece.Text = footerPiece > 0 ? "قطعة: " + footerPiece.ToString("0") : "";
+        TxtFooterPiece.Text = footerPiece > 0 ? $"{footerPieceName}: {footerPiece:0}" : "";
         TxtFooterPiece.Visibility = footerPiece > 0 ? Visibility.Visible : Visibility.Collapsed;
         TxtFooterRetailRev.Text = footerRetailRev > 0 ? "قطاعي: " + footerRetailRev.ToString("0.##") + " ج.م" : "";
         TxtFooterRetailRev.Visibility = footerRetailRev > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -806,7 +818,10 @@ public partial class ReportsPage : Page
         try
         {
             using var writer = new System.IO.StreamWriter(saveDialog.FileName, false, System.Text.Encoding.UTF8);
-            writer.WriteLine("المنتج,كرتونة,علبة,قطعة,إيراد قطاعي,إيراد جملة,تكلفة قطاعي,تكلفة جملة,الربح,نسبة الربح");
+            var csvCartonName = _lastReportData.FirstOrDefault(r => ((int)r._cartonQty) > 0)?.CartonName ?? "كرتونة";
+            var csvBoxName = _lastReportData.FirstOrDefault(r => ((int)r._boxQty) > 0)?.BoxName ?? "علبة";
+            var csvPieceName = _lastReportData.FirstOrDefault(r => ((int)r._pieceQty) > 0)?.PieceName ?? "قطعة";
+            writer.WriteLine($"المنتج,{csvCartonName},{csvBoxName},{csvPieceName},إيراد قطاعي,إيراد جملة,تكلفة قطاعي,تكلفة جملة,الربح,نسبة الربح");
 
             foreach (dynamic item in _lastReportData)
             {

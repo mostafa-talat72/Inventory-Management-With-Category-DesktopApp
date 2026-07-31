@@ -148,7 +148,7 @@
                                             <TextBlock Text="2" FontSize="11" FontWeight="Bold" Foreground="White"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
-                                        <TextBlock Text="القطعة" FontSize="14" FontWeight="SemiBold"
+                                        <TextBlock x:Name="TxtPieceTitle" Text="القطعة" FontSize="14" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource HeadingTextBrush}"
                                                    VerticalAlignment="Center" Margin="8,0,0,0" />
                                         <Border CornerRadius="4" Background="#E8EAF6" Padding="7,2" Margin="8,0,0,0" VerticalAlignment="Center">
@@ -169,11 +169,12 @@
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
                                             <Border Grid.Column="0" CornerRadius="7" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="2" Background="{DynamicResource CardBackgroundAlt}">
-                                                <TextBox x:Name="TxtPieceName" Text="قطعة" FontSize="13"
-                                                         Padding="10,8" BorderThickness="0" Background="Transparent"
-                                                         Foreground="{DynamicResource HeadingTextBrush}"
-                                                         CaretBrush="{DynamicResource HeadingTextBrush}"
-                                                         HorizontalAlignment="Center" />
+                                                    <TextBox x:Name="TxtPieceName" Text="قطعة" FontSize="13"
+                                                             Padding="10,8" BorderThickness="0" Background="Transparent"
+                                                             Foreground="{DynamicResource HeadingTextBrush}"
+                                                             CaretBrush="{DynamicResource HeadingTextBrush}"
+                                                             TextChanged="UnitName_TextChanged"
+                                                             HorizontalAlignment="Center" />
                                             </Border>
                                             <Border Grid.Column="1" CornerRadius="7" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Margin="2" Background="{DynamicResource CardBackgroundAlt}">
                                                 <TextBox x:Name="TxtPieceRetail" wm:WatermarkBehavior.Watermark="سعر القطاعي *"
@@ -203,7 +204,7 @@
                                             <TextBlock Text="3" FontSize="11" FontWeight="Bold" Foreground="White"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
-                                        <TextBlock Text="العلبة" FontSize="14" FontWeight="SemiBold"
+                                        <TextBlock x:Name="TxtBoxTitle" Text="العلبة" FontSize="14" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource HeadingTextBrush}"
                                                    VerticalAlignment="Center" Margin="8,0,0,0" />
                                         <Border CornerRadius="4" Background="#E0F2F1" Padding="7,2" Margin="8,0,0,0" VerticalAlignment="Center">
@@ -233,6 +234,7 @@
                                                              Padding="8,6" BorderThickness="0" Background="Transparent"
                                                              Foreground="{DynamicResource HeadingTextBrush}"
                                                              CaretBrush="{DynamicResource HeadingTextBrush}"
+                                                             TextChanged="UnitName_TextChanged"
                                                              HorizontalAlignment="Center" />
                                                 </Border>
                                                 <Border Grid.Column="1" CornerRadius="6" BorderBrush="{DynamicResource BorderBrushLight}" BorderThickness="1" Margin="2" Background="{DynamicResource CardBackground}">
@@ -273,7 +275,7 @@
                                             <TextBlock Text="4" FontSize="11" FontWeight="Bold" Foreground="White"
                                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                                         </Border>
-                                        <TextBlock Text="الكرتونة" FontSize="14" FontWeight="SemiBold"
+                                        <TextBlock x:Name="TxtCartonTitle" Text="الكرتونة" FontSize="14" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource HeadingTextBrush}"
                                                    VerticalAlignment="Center" Margin="8,0,0,0" />
                                         <Border CornerRadius="4" Background="#E0F2F1" Padding="7,2" Margin="8,0,0,0" VerticalAlignment="Center">
@@ -303,6 +305,7 @@
                                                              Padding="8,6" BorderThickness="0" Background="Transparent"
                                                              Foreground="{DynamicResource HeadingTextBrush}"
                                                              CaretBrush="{DynamicResource HeadingTextBrush}"
+                                                             TextChanged="UnitName_TextChanged"
                                                              HorizontalAlignment="Center" />
                                                 </Border>
                                                 <Border Grid.Column="1" CornerRadius="6" BorderBrush="{DynamicResource BorderBrushLight}" BorderThickness="1" Margin="2" Background="{DynamicResource CardBackground}">

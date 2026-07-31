@@ -208,9 +208,13 @@ public partial class ManageOrdersDialog : UserControl
         foreach (var item in order.Items.OrderBy(i => i.Product.Name))
         {
             string qtyDisplay = "";
-            if (item.CartonQuantity > 0) qtyDisplay += $"{item.CartonQuantity} كرتونة  ";
-            if (item.BoxQuantity    > 0) qtyDisplay += $"{item.BoxQuantity} علبة  ";
-            if (item.PieceQuantity  > 0) qtyDisplay += $"{item.PieceQuantity} قطعة";
+            var units = item.Product.Units.ToList();
+            var cartonName = units.FirstOrDefault(u => u.UnitType == UnitType.Carton)?.Name ?? "كرتونة";
+            var boxName = units.FirstOrDefault(u => u.UnitType == UnitType.Box)?.Name ?? "علبة";
+            var pieceName = units.FirstOrDefault(u => u.UnitType == UnitType.Piece)?.Name ?? "قطعة";
+            if (item.CartonQuantity > 0) qtyDisplay += $"{item.CartonQuantity} {cartonName}  ";
+            if (item.BoxQuantity    > 0) qtyDisplay += $"{item.BoxQuantity} {boxName}  ";
+            if (item.PieceQuantity  > 0) qtyDisplay += $"{item.PieceQuantity} {pieceName}";
             qtyDisplay = qtyDisplay.Trim();
 
             string priceTypeText = item.PriceType == PriceType.Retail ? "قطاعي" : "جملة";

@@ -105,19 +105,19 @@ public class ReceiptPrinter : IDisposable
             if (g.Cartons > 0 && cartonUnit != null)
             {
                 decimal p = isWholesale ? cartonUnit.WholesalePrice : cartonUnit.RetailPrice;
-                qtyLines.Add($"{ToArabicNumerals(g.Cartons.ToString())} كرتونة");
+                qtyLines.Add($"{ToArabicNumerals(g.Cartons.ToString())} {cartonUnit.Name}");
                 priceLines.Add(ToArabicNumerals($"{p:0.##}"));
             }
             if (g.Boxes > 0 && boxUnit != null)
             {
                 decimal p = isWholesale ? boxUnit.WholesalePrice : boxUnit.RetailPrice;
-                qtyLines.Add($"{ToArabicNumerals(g.Boxes.ToString())} علبة");
+                qtyLines.Add($"{ToArabicNumerals(g.Boxes.ToString())} {boxUnit.Name}");
                 priceLines.Add(ToArabicNumerals($"{p:0.##}"));
             }
             if (g.Pieces > 0 && pieceUnit != null)
             {
                 decimal p = isWholesale ? pieceUnit.WholesalePrice : pieceUnit.RetailPrice;
-                qtyLines.Add($"{ToArabicNumerals(g.Pieces.ToString())} قطعة");
+                qtyLines.Add($"{ToArabicNumerals(g.Pieces.ToString())} {pieceUnit.Name}");
                 priceLines.Add(ToArabicNumerals($"{p:0.##}"));
             }
 
@@ -655,19 +655,19 @@ public class ReceiptPrinter : IDisposable
             if (g.Sum(i => i.CartonQuantity) > 0 && cartonUnit != null)
             {
                 decimal p = isWholesale ? cartonUnit.WholesalePrice : cartonUnit.RetailPrice;
-                qtyLines.Add($"{ToArabicNumerals(g.Sum(i => i.CartonQuantity).ToString())} كرتونة");
+                qtyLines.Add($"{ToArabicNumerals(g.Sum(i => i.CartonQuantity).ToString())} {cartonUnit.Name}");
                 priceLines.Add(ToArabicNumerals($"{p:0.##}"));
             }
             if (g.Sum(i => i.BoxQuantity) > 0 && boxUnit != null)
             {
                 decimal p = isWholesale ? boxUnit.WholesalePrice : boxUnit.RetailPrice;
-                qtyLines.Add($"{ToArabicNumerals(g.Sum(i => i.BoxQuantity).ToString())} علبة");
+                qtyLines.Add($"{ToArabicNumerals(g.Sum(i => i.BoxQuantity).ToString())} {boxUnit.Name}");
                 priceLines.Add(ToArabicNumerals($"{p:0.##}"));
             }
             if (g.Sum(i => i.PieceQuantity) > 0 && pieceUnit != null)
             {
                 decimal p = isWholesale ? pieceUnit.WholesalePrice : pieceUnit.RetailPrice;
-                qtyLines.Add($"{ToArabicNumerals(g.Sum(i => i.PieceQuantity).ToString())} قطعة");
+                qtyLines.Add($"{ToArabicNumerals(g.Sum(i => i.PieceQuantity).ToString())} {pieceUnit.Name}");
                 priceLines.Add(ToArabicNumerals($"{p:0.##}"));
             }
 

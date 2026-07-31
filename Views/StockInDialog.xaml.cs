@@ -180,7 +180,10 @@ public partial class StockInDialog : UserControl
             ProductName = product.Name,
             HasCarton = units.Any(u => u.UnitType == UnitType.Carton),
             HasBox    = units.Any(u => u.UnitType == UnitType.Box),
-            HasPiece  = units.Any(u => u.UnitType == UnitType.Piece)
+            HasPiece  = units.Any(u => u.UnitType == UnitType.Piece),
+            CartonName = units.FirstOrDefault(u => u.UnitType == UnitType.Carton)?.Name ?? "كرتونة",
+            BoxName    = units.FirstOrDefault(u => u.UnitType == UnitType.Box)?.Name ?? "علبة",
+            PieceName  = units.FirstOrDefault(u => u.UnitType == UnitType.Piece)?.Name ?? "قطعة"
         };
         _selectedEntries.Add(entry);
         UpdateSelectedCount();
@@ -391,6 +394,10 @@ public class StockInEntry : INotifyPropertyChanged
     public bool HasCarton { get; set; }
     public bool HasBox { get; set; }
     public bool HasPiece { get; set; }
+
+    public string CartonName { get; set; } = "كرتونة";
+    public string BoxName { get; set; } = "علبة";
+    public string PieceName { get; set; } = "قطعة";
 
     public event PropertyChangedEventHandler? PropertyChanged;
     private void OnPropChanged([CallerMemberName] string? n = null)

@@ -115,6 +115,10 @@ public class InventoryService
 
         int total = GetAvailableStock(product);
 
+        var cartonName = units.FirstOrDefault(u => u.UnitType == UnitType.Carton)?.Name ?? "كرتونة";
+        var boxName = units.FirstOrDefault(u => u.UnitType == UnitType.Box)?.Name ?? "علبة";
+        var pieceName = units.FirstOrDefault(u => u.UnitType == UnitType.Piece)?.Name ?? "قطعة";
+
         // Carton → Box → Piece (full hierarchy)
         if (hasCarton && hasBox && hasPiece)
         {
@@ -124,7 +128,7 @@ public class InventoryService
             int afterCartons = total % ppc;
             int boxes = afterCartons / ppb;
             int pieces = afterCartons % ppb;
-            return $"{cartons} كرتونة, {boxes} علبة, {pieces} قطعة";
+            return $"{cartons} {cartonName}, {boxes} {boxName}, {pieces} {pieceName}";
         }
 
         // Carton → Box (no piece)
@@ -134,10 +138,10 @@ public class InventoryService
             int cartons = total / bpc;
             int remBoxes = total % bpc;
             if (cartons > 0 && remBoxes > 0)
-                return $"{cartons} كرتونة, {remBoxes} علبة";
+                return $"{cartons} {cartonName}, {remBoxes} {boxName}";
             if (cartons > 0)
-                return $"{cartons} كرتونة";
-            return $"{remBoxes} علبة";
+                return $"{cartons} {cartonName}";
+            return $"{remBoxes} {boxName}";
         }
 
         // Carton → Piece (no box)
@@ -146,12 +150,12 @@ public class InventoryService
             int ppc = GetPiecesPerCarton(product);
             int cartons = total / ppc;
             int pieces = total % ppc;
-            return $"{cartons} كرتونة, {pieces} قطعة";
+            return $"{cartons} {cartonName}, {pieces} {pieceName}";
         }
 
         // Carton only
         if (hasCarton && !hasBox && !hasPiece)
-            return $"{total} كرتونة";
+            return $"{total} {cartonName}";
 
         // Box → Piece (no carton)
         if (!hasCarton && hasBox && hasPiece)
@@ -159,15 +163,15 @@ public class InventoryService
             int ppb = GetPiecesPerBox(product);
             int boxes = total / ppb;
             int pieces = total % ppb;
-            return boxes > 0 ? $"{boxes} علبة, {pieces} قطعة" : $"{pieces} قطعة";
+            return boxes > 0 ? $"{boxes} {boxName}, {pieces} {pieceName}" : $"{pieces} {pieceName}";
         }
 
         // Box only
         if (!hasCarton && hasBox && !hasPiece)
-            return $"{total} علبة";
+            return $"{total} {boxName}";
 
         // Piece only (or fallback)
-        return $"{total} قطعة";
+        return $"{total} {pieceName}";
     }
 
     public async Task StockIn(Product product, int cartonQty, int boxQty, int pieceQty, decimal totalCost, string? notes = null)
@@ -188,9 +192,9 @@ public class InventoryService
         _db.InventoryBatches.Add(batch);
 
         string reasonParts = "وارد";
-        if (cartonQty > 0) reasonParts += $" - {cartonQty} كرتونة";
-        if (boxQty > 0) reasonParts += $" - {boxQty} علبة";
-        if (pieceQty > 0) reasonParts += $" - {pieceQty} قطعة";
+        if (cartonQty > 0) reasonParts += $" - {cartonQty} {GetUnitName(product, UnitType.Carton)}";
+        if (boxQty > 0) reasonParts += $" - {boxQty} {GetUnitName(product, UnitType.Box)}";
+        if (pieceQty > 0) reasonParts += $" - {pieceQty} {GetUnitName(product, UnitType.Piece)}";
 
         _db.InventoryMovements.Add(new InventoryMovement
         {
@@ -264,9 +268,25 @@ public class InventoryService
             MovementType = MovementType.StockOut,
             Quantity = totalPieces,
             ReferenceType = ReferenceType.Adjustment,
-            Notes = notes ?? $"منصرف - {totalPieces} قطعة"
+            Notes = notes ?? $"منصرف - {totalPieces} {GetUnitName(product, UnitType.Piece)}"
         });
 
         await _db.SaveChangesAsync();
+    }
+
+    private string GetUnitName(Product product, UnitType type)
+    {
+        var name = _db.ProductUnits.AsNoTracking()
+            .Where(u => u.ProductId == product.Id && u.UnitType == type)
+            .Select(u => u.Name)
+            .FirstOrDefault();
+        return string.IsNullOrWhiteSpace(name)
+            ? type switch
+            {
+                UnitType.Carton => "كرتونة",
+                UnitType.Box => "علبة",
+                _ => "قطعة"
+            }
+            : name;
     }
 }

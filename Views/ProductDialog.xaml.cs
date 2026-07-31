@@ -134,6 +134,7 @@ public partial class ProductDialog : UserControl
 
         LoadCategories();
         _loaded = true;
+        UpdateUnitLabels();
 
         // بعد التهيئة الكاملة نحمّل منتجات القسم
         Loaded += (_, _) => LoadCategoryProducts();
@@ -190,7 +191,7 @@ public partial class ProductDialog : UserControl
             bool hasBox = units.Any(u => u.UnitType == UnitType.Box && u.ParentUnitId == carton.Id);
         }
 
-        UpdatePieceDependentFields();
+        UpdateUnitLabels();
         _loaded = true;
     }
 
@@ -254,6 +255,10 @@ public partial class ProductDialog : UserControl
         bool hasBox = ChkHasBox.IsChecked == true;
         bool hasCarton = ChkHasCarton.IsChecked == true;
 
+        var pieceName = PieceName;
+        var boxName = BoxName;
+        var cartonName = CartonName;
+
         if (hasBox && !hasPiece)
         {
             BoxQtyCol.Width = new GridLength(0);
@@ -279,13 +284,13 @@ public partial class ProductDialog : UserControl
         // Box label & hint
         if (hasPiece)
         {
-            TxtBoxUnitLabel.Text = "العلبة تحتوي على: قطع";
-            TxtBoxHint.Text = "* السعر يُحتسب تلقائياً من سعر القطعة × عدد القطع";
+            TxtBoxUnitLabel.Text = $"{boxName} تحتوي على: {pieceName}";
+            TxtBoxHint.Text = $"* السعر يُحتسب تلقائياً من سعر {pieceName} × عدد {pieceName}";
             TxtBoxHint.Visibility = Visibility.Visible;
         }
         else
         {
-            TxtBoxUnitLabel.Text = "العلبة - وحدة مستقلة";
+            TxtBoxUnitLabel.Text = $"{boxName} - وحدة مستقلة";
             TxtBoxHint.Visibility = Visibility.Collapsed;
         }
 
@@ -294,23 +299,46 @@ public partial class ProductDialog : UserControl
         {
             if (hasBox)
             {
-                TxtCartonUnitLabel.Text = "الكرتونة تحتوي على: علب";
-                TxtCartonHint.Text = "* السعر يُحتسب تلقائياً من سعر العلبة × عدد العلب";
+                TxtCartonUnitLabel.Text = $"{cartonName} تحتوي على: {boxName}";
+                TxtCartonHint.Text = $"* السعر يُحتسب تلقائياً من سعر {boxName} × عدد {boxName}";
                 TxtCartonHint.Visibility = Visibility.Visible;
             }
             else if (hasPiece)
             {
-                TxtCartonUnitLabel.Text = "الكرتونة تحتوي على: قطع مباشرة";
-                TxtCartonHint.Text = "* السعر يُحتسب تلقائياً من سعر القطعة × عدد القطع";
+                TxtCartonUnitLabel.Text = $"{cartonName} تحتوي على: {pieceName} مباشرة";
+                TxtCartonHint.Text = $"* السعر يُحتسب تلقائياً من سعر {pieceName} × عدد {pieceName}";
                 TxtCartonHint.Visibility = Visibility.Visible;
             }
             else
             {
-                TxtCartonUnitLabel.Text = "الكرتونة - وحدة مستقلة";
+                TxtCartonUnitLabel.Text = $"{cartonName} - وحدة مستقلة";
                 TxtCartonHint.Text = "* أدخل السعر يدوياً";
                 TxtCartonHint.Visibility = Visibility.Visible;
             }
         }
+    }
+
+    private string PieceName => string.IsNullOrWhiteSpace(TxtPieceName?.Text) ? "قطعة" : TxtPieceName.Text.Trim();
+    private string BoxName => string.IsNullOrWhiteSpace(TxtBoxName?.Text) ? "علبة" : TxtBoxName.Text.Trim();
+    private string CartonName => string.IsNullOrWhiteSpace(TxtCartonName?.Text) ? "كرتونة" : TxtCartonName.Text.Trim();
+
+    private void UpdateUnitLabels()
+    {
+        if (ChkHasPiece == null || ChkHasBox == null || ChkHasCarton == null) return;
+
+        ChkHasPiece.Content = $"يوجد {PieceName}";
+        ChkHasBox.Content = $"يوجد {BoxName}";
+        ChkHasCarton.Content = $"يوجد {CartonName}";
+        TxtPieceTitle.Text = PieceName;
+        TxtBoxTitle.Text = BoxName;
+        TxtCartonTitle.Text = CartonName;
+        UpdatePieceDependentFields();
+    }
+
+    private void UnitName_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (!_loaded) return;
+        UpdateUnitLabels();
     }
 
     private void Qty_TextChanged(object sender, TextChangedEventArgs e)
@@ -478,23 +506,23 @@ public partial class ProductDialog : UserControl
 
         if (!hasPiece && !hasBox && !hasCarton)
         {
-            NotificationManager.ShowError("الرجاء اختيار نوع تعبئة واحد على الأقل (قطعة، علبة، كرتونة)");
+            NotificationManager.ShowError($"الرجاء اختيار نوع تعبئة واحد على الأقل ({PieceName}، {BoxName}، {CartonName})");
             return false;
         }
 
         if (hasPiece && (string.IsNullOrWhiteSpace(TxtPieceRetail.Text) || !TryParseDecimal(TxtPieceRetail.Text, out _)))
         {
-            NotificationManager.ShowError("الرجاء إدخال سعر القطاعي للقطعة");
+            NotificationManager.ShowError($"الرجاء إدخال سعر القطاعي لـ{PieceName}");
             return false;
         }
         if (hasBox && (string.IsNullOrWhiteSpace(TxtBoxRetail.Text) || !TryParseDecimal(TxtBoxRetail.Text, out _)))
         {
-            NotificationManager.ShowError("الرجاء إدخال سعر القطاعي للعلبة");
+            NotificationManager.ShowError($"الرجاء إدخال سعر القطاعي لـ{BoxName}");
             return false;
         }
         if (hasCarton && (string.IsNullOrWhiteSpace(TxtCartonRetail.Text) || !TryParseDecimal(TxtCartonRetail.Text, out _)))
         {
-            NotificationManager.ShowError("الرجاء إدخال سعر القطاعي للكرتونة");
+            NotificationManager.ShowError($"الرجاء إدخال سعر القطاعي لـ{CartonName}");
             return false;
         }
 
