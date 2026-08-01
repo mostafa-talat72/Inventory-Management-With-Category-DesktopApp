@@ -14,6 +14,11 @@ public class Product
 
     public string? ImagePath { get; set; }
 
+    [MaxLength(100)]
+    public string? Barcode { get; set; }
+
+    public bool IsFavorite { get; set; }
+
     public int? CategoryId { get; set; }
     public Category? Category { get; set; }
 

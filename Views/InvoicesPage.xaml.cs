@@ -497,6 +497,49 @@ public partial class InvoicesPage : Page
         _searchTimer.Start();
     }
 
+    private void ExportExcel_Click(object sender, RoutedEventArgs e)
+    {
+        var invoices = GetBaseQuery().ToList();
+        if (invoices.Count == 0)
+        {
+            MessageBox.Show("لا توجد فواتير للتصدير.", "تصدير", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var saveDialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "Excel Files (*.xlsx)|*.xlsx",
+            FileName = $"الفواتير_{DateTime.Now:yyyyMMdd}.xlsx"
+        };
+        if (saveDialog.ShowDialog() != true) return;
+
+        try
+        {
+            string[] headers = { "رقم الفاتورة", "التاريخ", "العميل", "الحالة", "الإجمالي", "الخصم", "المدفوع", "المتبقي" };
+            var rows = invoices.Select(i => new object?[]
+            {
+                i.Id,
+                i.CreatedAt.ToString("yyyy/MM/dd HH:mm"),
+                i.CustomerName ?? "نقدي",
+                i.Status switch
+                {
+                    InvoiceStatus.Paid => "مدفوعة",
+                    InvoiceStatus.PartiallyPaid => "مدفوعة جزئياً",
+                    InvoiceStatus.Cancelled => "ملغاة",
+                    _ => "غير مدفوعة"
+                },
+                i.TotalAmount, i.Discount, i.TotalPaid, i.Remaining
+            }).ToList();
+
+            ExcelExportService.Export(saveDialog.FileName, headers, rows);
+            NotificationManager.ShowSuccess("تم تصدير الفواتير إلى Excel بنجاح");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"حدث خطأ أثناء التصدير:\n{ex.Message}", "تصدير", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void OpenInvoice(Invoice invoice)
     {
         var mainWindow = (MainWindow)Window.GetWindow(this);

@@ -27,6 +27,19 @@ namespace ProductApp.Views
         private int? _selectedCategoryId = null;
         private readonly Dictionary<int, System.Windows.Threading.DispatcherTimer> _flashTimers = new();
         private readonly Dictionary<int, Brush?> _flashOriginals = new();
+        private readonly System.Windows.Threading.DispatcherTimer _searchTimer = new()
+        {
+            Interval = TimeSpan.FromMilliseconds(300)
+        };
+
+        private void InitSearchTimer()
+        {
+            _searchTimer.Tick += (_, _) =>
+            {
+                _searchTimer.Stop();
+                LoadProducts(TxtSearch.Text.Trim());
+            };
+        }
 
         private class CategoryChip : System.ComponentModel.INotifyPropertyChanged
         {
@@ -94,6 +107,7 @@ namespace ProductApp.Views
             _db = db;
             _inv = new InventoryService(db);
             _customer = customer;
+            InitSearchTimer();
             Loaded += OnLoaded;
         }
 
@@ -104,6 +118,7 @@ namespace ProductApp.Views
             _inv = new InventoryService(db);
             _invoice = invoice;
             _customer = invoice.Customer;
+            InitSearchTimer();
             Loaded += OnLoadedForInvoice;
         }
 
@@ -116,6 +131,7 @@ namespace ProductApp.Views
             _invoice = invoice;
             _customer = invoice.Customer;
             _orderToEdit = orderToEdit;
+            InitSearchTimer();
             Loaded += OnLoadedForEditOrder;
         }
 
@@ -313,19 +329,27 @@ namespace ProductApp.Views
             }
 
             if (!string.IsNullOrWhiteSpace(filter))
-                query = query.Where(p => p.Name.Contains(filter));
+                query = query.Where(p => p.Name.Contains(filter) || (p.Barcode != null && p.Barcode.Contains(filter)));
 
-            var products = query.OrderBy(p => p.Name).ToList();
+            var products = query.ToList();
 
-            var items = products.Select(p =>
-            {
-                var stock = _inv.GetStockDisplay(p);
-                var units = p.Units.OrderBy(u => u.UnitType).ToList();
-                string unitInfo = string.Join(" | ", units.Select(u => $"{u.Name} {u.RetailPrice:0.##}"));
-                string priceInfo = units.Any() ? $"قطاعي: {units.Min(u => u.RetailPrice):0.##}  جملة: {units.Min(u => u.WholesalePrice):0.##}" : "";
-                var cmd = new RelayCommand(() => SelectProduct(p));
-                return new { p.Name, UnitsDisplay = unitInfo, StockDisplay = stock, PriceDisplay = priceInfo, SelectCommand = cmd };
-            }).ToList();
+            var totals = _db.InventoryBatches
+                .GroupBy(b => b.ProductId)
+                .Select(g => new { ProductId = g.Key, Total = g.Sum(b => b.RemainingQuantity) })
+                .ToDictionary(x => x.ProductId, x => x.Total);
+
+            var items = products
+                .OrderBy(p => p.IsFavorite ? 0 : 1)
+                .ThenBy(p => p.Name)
+                .Select(p =>
+                {
+                    var units = p.Units.OrderBy(u => u.UnitType).ToList();
+                    string unitInfo = string.Join(" | ", units.Select(u => $"{u.Name} {u.RetailPrice:0.##}"));
+                    string priceInfo = units.Any() ? $"قطاعي: {units.Min(u => u.RetailPrice):0.##}  جملة: {units.Min(u => u.WholesalePrice):0.##}" : "";
+                    var stock = InventoryService.GetStockDisplay(p.Units, totals.GetValueOrDefault(p.Id));
+                    var cmd = new RelayCommand(() => SelectProduct(p));
+                    return new { p.Name, UnitsDisplay = unitInfo, StockDisplay = stock, PriceDisplay = priceInfo, SelectCommand = cmd };
+                }).ToList();
 
             ProductCards.ItemsSource = items;
         }
@@ -1044,7 +1068,21 @@ namespace ProductApp.Views
 
         private void TxtSearch_TextChanged(object sender, TextChangedEventArgs e)
         {
-            LoadProducts(TxtSearch.Text.Trim());
+            _searchTimer.Stop();
+            _searchTimer.Start();
+        }
+
+        private void TxtSearch_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Enter) return;
+            var text = TxtSearch.Text.Trim();
+            if (text.Length == 0) return;
+            var match = _db.Products.FirstOrDefault(p => p.Barcode == text || p.Name == text);
+            if (match != null)
+            {
+                SelectProduct(match);
+                e.Handled = true;
+            }
         }
         private static int ParseInt(string? text) =>
             text != null && int.TryParse(text, out int v) ? v : 0;

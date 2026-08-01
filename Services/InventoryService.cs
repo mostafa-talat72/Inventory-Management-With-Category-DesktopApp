@@ -109,34 +109,49 @@ public class InventoryService
     public string GetStockDisplay(Product product)
     {
         var units = _db.ProductUnits.AsNoTracking().Where(u => u.ProductId == product.Id).OrderBy(u => u.UnitType).ToList();
+        int total = GetAvailableStock(product);
+        return GetStockDisplay(units, total);
+    }
+
+    /// <summary>
+    /// نسخة ثابتة لا تستعلم من قاعدة البيانات — تقبل الوحدات والمخزون الكلي
+    /// (لتفادي استعلامات N+1 في القوائم الكبيرة).
+    /// </summary>
+    public static string GetStockDisplay(IEnumerable<ProductUnit> unitsSource, int total)
+    {
+        var units = unitsSource.OrderBy(u => u.UnitType).ToList();
         bool hasCarton = units.Any(u => u.UnitType == UnitType.Carton);
         bool hasBox = units.Any(u => u.UnitType == UnitType.Box);
         bool hasPiece = units.Any(u => u.UnitType == UnitType.Piece);
 
-        int total = GetAvailableStock(product);
+        var carton = units.FirstOrDefault(u => u.UnitType == UnitType.Carton);
+        var box = units.FirstOrDefault(u => u.UnitType == UnitType.Box);
+        var piece = units.FirstOrDefault(u => u.UnitType == UnitType.Piece);
 
-        var cartonName = units.FirstOrDefault(u => u.UnitType == UnitType.Carton)?.Name ?? "كرتونة";
-        var boxName = units.FirstOrDefault(u => u.UnitType == UnitType.Box)?.Name ?? "علبة";
-        var pieceName = units.FirstOrDefault(u => u.UnitType == UnitType.Piece)?.Name ?? "قطعة";
+        var cartonName = carton?.Name ?? "كرتونة";
+        var boxName = box?.Name ?? "علبة";
+        var pieceName = piece?.Name ?? "قطعة";
+
+        int piecesPerBox = box?.QuantityPerParent ?? 1;
+        int piecesPerCarton = carton != null
+            ? (box != null && box.ParentUnitId == carton.Id ? carton.QuantityPerParent * piecesPerBox : carton.QuantityPerParent)
+            : piecesPerBox;
 
         // Carton → Box → Piece (full hierarchy)
         if (hasCarton && hasBox && hasPiece)
         {
-            int ppc = GetPiecesPerCarton(product);
-            int ppb = GetPiecesPerBox(product);
-            int cartons = total / ppc;
-            int afterCartons = total % ppc;
-            int boxes = afterCartons / ppb;
-            int pieces = afterCartons % ppb;
-            return $"{cartons} {cartonName}, {boxes} {boxName}, {pieces} {pieceName}";
+            int cartons = total / piecesPerCarton;
+            int afterCartons = total % piecesPerCarton;
+            int boxes = afterCartons / piecesPerBox;
+            int piecesLeft = afterCartons % piecesPerBox;
+            return $"{cartons} {cartonName}, {boxes} {boxName}, {piecesLeft} {pieceName}";
         }
 
         // Carton → Box (no piece)
         if (hasCarton && hasBox && !hasPiece)
         {
-            int bpc = GetBoxesPerCarton(product);
-            int cartons = total / bpc;
-            int remBoxes = total % bpc;
+            int cartons = total / piecesPerCarton;
+            int remBoxes = total % piecesPerCarton;
             if (cartons > 0 && remBoxes > 0)
                 return $"{cartons} {cartonName}, {remBoxes} {boxName}";
             if (cartons > 0)
@@ -147,10 +162,9 @@ public class InventoryService
         // Carton → Piece (no box)
         if (hasCarton && !hasBox && hasPiece)
         {
-            int ppc = GetPiecesPerCarton(product);
-            int cartons = total / ppc;
-            int pieces = total % ppc;
-            return $"{cartons} {cartonName}, {pieces} {pieceName}";
+            int cartons = total / piecesPerCarton;
+            int piecesLeft = total % piecesPerCarton;
+            return $"{cartons} {cartonName}, {piecesLeft} {pieceName}";
         }
 
         // Carton only
@@ -160,10 +174,9 @@ public class InventoryService
         // Box → Piece (no carton)
         if (!hasCarton && hasBox && hasPiece)
         {
-            int ppb = GetPiecesPerBox(product);
-            int boxes = total / ppb;
-            int pieces = total % ppb;
-            return boxes > 0 ? $"{boxes} {boxName}, {pieces} {pieceName}" : $"{pieces} {pieceName}";
+            int boxes = total / piecesPerBox;
+            int piecesLeft = total % piecesPerBox;
+            return boxes > 0 ? $"{boxes} {boxName}, {piecesLeft} {pieceName}" : $"{piecesLeft} {pieceName}";
         }
 
         // Box only

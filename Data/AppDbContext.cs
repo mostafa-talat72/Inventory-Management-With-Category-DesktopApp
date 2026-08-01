@@ -105,6 +105,38 @@ CREATE TABLE IF NOT EXISTS Categories (
                 alter.ExecuteNonQuery();
             }
         }
+
+        // 5) Barcode column in Products
+        using (var checkBarcode = conn.CreateCommand())
+        {
+            checkBarcode.CommandText = "PRAGMA table_info(Products)";
+            using var reader = checkBarcode.ExecuteReader();
+            var hasBarcode = false;
+            while (reader.Read())
+                if ((string)reader["name"] == "Barcode") { hasBarcode = true; break; }
+            if (!hasBarcode)
+            {
+                using var alter = conn.CreateCommand();
+                alter.CommandText = "ALTER TABLE Products ADD COLUMN Barcode TEXT";
+                alter.ExecuteNonQuery();
+            }
+        }
+
+        // 6) IsFavorite column in Products
+        using (var checkFav = conn.CreateCommand())
+        {
+            checkFav.CommandText = "PRAGMA table_info(Products)";
+            using var reader = checkFav.ExecuteReader();
+            var hasFav = false;
+            while (reader.Read())
+                if ((string)reader["name"] == "IsFavorite") { hasFav = true; break; }
+            if (!hasFav)
+            {
+                using var alter = conn.CreateCommand();
+                alter.CommandText = "ALTER TABLE Products ADD COLUMN IsFavorite INTEGER NOT NULL DEFAULT 0";
+                alter.ExecuteNonQuery();
+            }
+        }
     }
 
     protected override void OnModelCreating(ModelBuilder model)

@@ -163,6 +163,7 @@ public partial class ProductDialog : UserControl
 
         TxtName.Text = _product!.Name;
         TxtDescription.Text = _product.Description;
+        TxtBarcode.Text = _product.Barcode ?? "";
         BtnSave.Content = "حفظ التعديلات";
 
         if (!string.IsNullOrWhiteSpace(_product.ImagePath) && File.Exists(_product.ImagePath))
@@ -478,6 +479,7 @@ public partial class ProductDialog : UserControl
 
         TxtName.Text = string.Empty;
         TxtDescription.Text = string.Empty;
+        TxtBarcode.Text = string.Empty;
 
         ChkHasPiece.IsChecked = false;
         TxtPieceName.Text = "قطعة";
@@ -567,6 +569,20 @@ public partial class ProductDialog : UserControl
 
         product.Name = name;
         product.Description = TxtDescription.Text?.Trim();
+        var barcodeText = TxtBarcode.Text?.Trim();
+        if (!string.IsNullOrWhiteSpace(barcodeText) && barcodeText != ProductApp.Converters.WatermarkBehavior.GetWatermark(TxtBarcode))
+        {
+            if (_db.Products.Any(p => p.Barcode == barcodeText && p.Id != excludeId))
+            {
+                NotificationManager.ShowError("هذا الباركود مستخدم لمنتج آخر");
+                return false;
+            }
+            product.Barcode = barcodeText;
+        }
+        else
+        {
+            product.Barcode = null;
+        }
         product.CategoryId = _selectedCategoryId;
         product.ImagePath = _selectedImagePath;
         _db.SaveChanges();

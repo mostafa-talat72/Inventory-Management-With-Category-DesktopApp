@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -21,18 +20,27 @@ public partial class ProductsPage : Page
 {
     private readonly AppDbContext _db;
     private readonly DispatcherTimer _searchTimer = new();
+    private const int LoadBatchSize = 300;
     private string? _currentSearch;
     private bool _loaded;
     private bool _isLoading;
+    private bool _isLoadingMore;
+    private bool _allLoaded;
     private bool _lowStockOnly;
     private string _sortMode = "name";
     private Product? _activeProduct;
     private List<Product>? _allProducts;
     private Dictionary<int, (int Total, decimal Value)>? _stockDataDict;
+    private HashSet<int>? _lowStockIds;
     private decimal _totalStockValue;
+    private int _totalProductCount;
+    private int _totalStockPieces;
+    private int _lowStockCount;
+    private ScrollViewer? _productsScroll;
     private int? _selectedCategoryId;
+    private bool _selectionMode;
 
-    private class ProductCardItem
+    private class ProductCardItem : INotifyPropertyChanged
     {
         public required string Name { get; init; }
         public required string UnitsDisplay { get; init; }
@@ -46,9 +54,6 @@ public partial class ProductsPage : Page
         public required string BadgeBg { get; init; }
         public required string BadgeFg { get; init; }
         public required string HasBadge { get; init; }
-        public System.Windows.Media.ImageSource? ProductImage { get; init; }
-        public required string HasImage { get; init; }
-        public required string NoImage { get; init; }
         public required Product Product { get; init; }
         public required ICommand SelectCommand { get; init; }
         public required ICommand AddStockCommand { get; init; }
@@ -56,6 +61,42 @@ public partial class ProductsPage : Page
         public required ICommand HistoryCommand { get; init; }
         public required ICommand EditCommand { get; init; }
         public required ICommand DeleteCommand { get; init; }
+        public ICommand? FavoriteCommand { get; set; }
+
+        private ImageSource? _productImage;
+        public ImageSource? ProductImage
+        {
+            get => _productImage;
+            set { _productImage = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasImage)); OnPropertyChanged(nameof(NoImage)); }
+        }
+
+        public string HasImage => _productImage != null ? "Visible" : "Collapsed";
+        public string NoImage => _productImage == null ? "Visible" : "Collapsed";
+
+        private bool _isFavorite;
+        public bool IsFavorite
+        {
+            get => _isFavorite;
+            set { _isFavorite = value; OnPropertyChanged(); }
+        }
+
+        private bool _isSelected;
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set { _isSelected = value; OnPropertyChanged(); }
+        }
+
+        private string _selectionVisible = "Collapsed";
+        public string SelectionVisible
+        {
+            get => _selectionVisible;
+            set { _selectionVisible = value; OnPropertyChanged(); }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged([CallerMemberName] string? n = null)
+            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(n));
     }
 
     private class CategoryCardItem : INotifyPropertyChanged
@@ -87,12 +128,24 @@ public partial class ProductsPage : Page
         _db = new AppDbContext();
         InitializeComponent();
 
+        RestorePreferences();
+        CmbSort.SelectedIndex = _sortMode switch
+        {
+            "stockAsc" => 1,
+            "stockDesc" => 2,
+            "valueDesc" => 3,
+            "fav" => 4,
+            _ => 0
+        };
+        TglLowStockOnly.IsChecked = _lowStockOnly;
+
         CategoryCardsList.ItemsSource = _categoryCards;
 
         Loaded += (_, _) =>
         {
             AmountsVisibilityService.VisibilityChanged += OnAmountsVisibilityChanged;
             LoadCategories();
+            HookProductsScroll();
         };
         Unloaded += (_, _) =>
         {
@@ -109,6 +162,25 @@ public partial class ProductsPage : Page
 
         _loaded = true;
         LoadProducts();
+    }
+
+    private void RestorePreferences()
+    {
+        var cfg = App.AppConfiguration;
+        if (cfg == null) return;
+        _sortMode = cfg.ProductsSortMode;
+        _lowStockOnly = cfg.ProductsLowStockOnly;
+        _selectedCategoryId = cfg.ProductsSelectedCategoryId;
+    }
+
+    private void SavePreferences()
+    {
+        var cfg = App.AppConfiguration;
+        if (cfg == null) return;
+        cfg.ProductsSortMode = _sortMode;
+        cfg.ProductsLowStockOnly = _lowStockOnly;
+        cfg.ProductsSelectedCategoryId = _selectedCategoryId;
+        try { cfg.Save(); } catch { }
     }
 
     private void OnAmountsVisibilityChanged()
@@ -202,6 +274,7 @@ public partial class ProductsPage : Page
             _selectedCategoryId = selected.Id;
             SetAllProductsCardState(false);
         }
+        SavePreferences();
         LoadProducts();
     }
 
@@ -210,6 +283,7 @@ public partial class ProductsPage : Page
         _selectedCategoryId = null;
         foreach (var c in _categoryCards) c.IsSelected = false;
         SetAllProductsCardState(true);
+        SavePreferences();
         LoadProducts();
     }
 
@@ -241,6 +315,7 @@ public partial class ProductsPage : Page
     private void TglLowStockOnly_Changed(object sender, RoutedEventArgs e)
     {
         _lowStockOnly = TglLowStockOnly.IsChecked == true;
+        SavePreferences();
         LoadProducts();
     }
 
@@ -252,8 +327,10 @@ public partial class ProductsPage : Page
             1 => "stockAsc",
             2 => "stockDesc",
             3 => "valueDesc",
+            4 => "fav",
             _ => "name"
         };
+        SavePreferences();
         LoadProducts();
     }
 
@@ -264,7 +341,12 @@ public partial class ProductsPage : Page
 
     private void Page_KeyDown(object sender, KeyEventArgs e)
     {
-        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.F)
+        if (e.Key == Key.F1)
+        {
+            OpenShortcuts();
+            e.Handled = true;
+        }
+        else if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.F)
         {
             SearchBox.Focus();
             SearchBox.SelectAll();
@@ -323,6 +405,7 @@ public partial class ProductsPage : Page
         _currentSearch = null;
         SetLowFilter(false);
         SetSortMode("name", 0);
+        SavePreferences();
         LoadProducts();
     }
 
@@ -333,6 +416,7 @@ public partial class ProductsPage : Page
         _currentSearch = null;
         SetLowFilter(false);
         SetSortMode("stockDesc", 2);
+        SavePreferences();
         LoadProducts();
     }
 
@@ -342,6 +426,7 @@ public partial class ProductsPage : Page
         SearchBox.Text = "";
         _currentSearch = null;
         SetLowFilter(true);
+        SavePreferences();
         LoadProducts();
     }
 
@@ -352,6 +437,7 @@ public partial class ProductsPage : Page
         _currentSearch = null;
         SetLowFilter(false);
         SetSortMode("valueDesc", 3);
+        SavePreferences();
         LoadProducts();
     }
 
@@ -422,45 +508,45 @@ public partial class ProductsPage : Page
         _isLoading = true;
         try
         {
-            var query = _db.Products.AsNoTracking();
+            _lowStockIds = ComputeLowStockIds();
 
-            if (_selectedCategoryId != null)
-            {
-                var catIds = GetCategoryAndDescendantIds(_selectedCategoryId.Value);
-                query = query.Where(p => p.CategoryId != null && catIds.Contains(p.CategoryId.Value));
-            }
+            var baseQuery = BuildBaseQuery();
+            _totalProductCount = baseQuery.Count();
 
-            if (!string.IsNullOrWhiteSpace(_currentSearch))
-                query = query.Where(p => p.Name.Contains(_currentSearch));
+            var agg = _db.InventoryBatches
+                .Where(b => baseQuery.Any(p => p.Id == b.ProductId))
+                .GroupBy(_ => 1)
+                .Select(g => new { Pieces = g.Sum(b => b.RemainingQuantity), Value = g.Sum(b => (decimal)b.RemainingQuantity * b.CostPricePerPiece) })
+                .FirstOrDefault();
+            _totalStockPieces = agg?.Pieces ?? 0;
+            _totalStockValue = agg?.Value ?? 0m;
 
-            _allProducts = query.Include(p => p.Units).OrderBy(p => p.Name).ToList();
+            var lowIds = _lowStockIds;
+            _lowStockCount = baseQuery.Count(p => lowIds.Contains(p.Id));
+
+            TxtTotalProducts.Text = _totalProductCount.ToString();
+            TxtTotalStock.Text    = _totalStockPieces.ToString("0");
+            TxtLowStock.Text      = _lowStockCount.ToString();
 
             _stockDataDict = _db.InventoryBatches
                 .GroupBy(b => b.ProductId)
                 .Select(g => new { ProductId = g.Key, Total = g.Sum(b => b.RemainingQuantity), Value = g.Sum(b => (decimal)b.RemainingQuantity * b.CostPricePerPiece) })
                 .ToDictionary(x => x.ProductId, x => (Total: x.Total, Value: x.Value));
 
-            var inv = new InventoryService(_db);
-            var totalStockPieces = 0;
-            var lowStockCount = 0;
-            _totalStockValue = 0m;
+            _allLoaded = false;
 
-            foreach (var p in _allProducts)
+            if (_sortMode == "name")
             {
-                var data = _stockDataDict.GetValueOrDefault(p.Id);
-                totalStockPieces += data.Total;
-                _totalStockValue  += data.Value;
-                if (IsLowStock(p, data.Total)) lowStockCount++;
+                // التصفح العادي: نافذة تدريجية (Keyset) — الباقي يُحمَّل عند التمرير
+                _allProducts = BuildWindowQuery(null, 0).Take(LoadBatchSize).ToList();
+                _allLoaded = _allProducts.Count < LoadBatchSize;
             }
-
-            TxtTotalProducts.Text = _allProducts.Count.ToString();
-            TxtTotalStock.Text    = totalStockPieces.ToString("0");
-            TxtLowStock.Text      = lowStockCount.ToString();
-
-            if (_lowStockOnly)
-                _allProducts = _allProducts
-                    .Where(p => IsLowStock(p, _stockDataDict.GetValueOrDefault(p.Id).Total))
-                    .ToList();
+            else
+            {
+                // الفرز بالمخزون/القيمة/المفضلة يتطلب القائمة كاملة
+                _allProducts = BuildWindowQuery(null, 0).ToList();
+                _allLoaded = true;
+            }
 
             BuildProductCards();
             ApplyAmountsMask();
@@ -470,6 +556,110 @@ public partial class ProductsPage : Page
                 : Visibility.Collapsed;
         }
         finally { _isLoading = false; }
+    }
+
+    /// <summary>
+    /// استعلام أساسي بفلترات القسم والبحث والمخزون المنخفض — كلها في SQL
+    /// حتى لا تُنقل البيانات كلها للذاكرة قبل التصفية.
+    /// </summary>
+    private IQueryable<Product> BuildBaseQuery()
+    {
+        int? catId = _selectedCategoryId;
+        string? search = string.IsNullOrWhiteSpace(_currentSearch) ? null : _currentSearch.Trim();
+        bool lowOnly = _lowStockOnly;
+        var lowIds = _lowStockIds;
+        var catIds = catId != null ? GetCategoryAndDescendantIds(catId.Value) : null;
+
+        return _db.Products.AsNoTracking().Where(p =>
+            (catId == null || (p.CategoryId != null && catIds!.Contains(p.CategoryId.Value)))
+            && (search == null || p.Name.Contains(search) || (p.Barcode != null && p.Barcode.Contains(search)))
+            && (!lowOnly || lowIds!.Contains(p.Id)));
+    }
+
+    /// <summary>
+    /// نافذة تدريجية بترتيب (الاسم، المعرّف) — Keyset Pagination.
+    /// CompareTo يُترجم في SQLite إلى مقارنة نصية مباشرة.
+    /// </summary>
+    private IQueryable<Product> BuildWindowQuery(string? lastName, int lastId)
+    {
+        IQueryable<Product> q = BuildBaseQuery().Include(p => p.Units);
+        if (lastName != null)
+            q = q.Where(p => p.Name.CompareTo(lastName) > 0 || (p.Name == lastName && p.Id > lastId));
+        return q.OrderBy(p => p.Name).ThenBy(p => p.Id);
+    }
+
+    private void LoadMoreProducts()
+    {
+        if (_isLoading || _isLoadingMore || _allLoaded || _sortMode != "name") return;
+        var last = _allProducts?[^1];
+        if (last == null) return;
+
+        _isLoadingMore = true;
+        try
+        {
+            var batch = BuildWindowQuery(last.Name, last.Id).Take(LoadBatchSize).ToList();
+            if (batch.Count == 0)
+            {
+                _allLoaded = true;
+                return;
+            }
+            _allProducts!.AddRange(batch);
+            _allLoaded = batch.Count < LoadBatchSize;
+            BuildProductCards();
+        }
+        finally { _isLoadingMore = false; }
+    }
+
+    private void HookProductsScroll()
+    {
+        if (_productsScroll != null) return;
+        _productsScroll = FindDescendant<ScrollViewer>(ProductsList);
+        if (_productsScroll == null) return;
+
+        _productsScroll.ScrollChanged += (_, e) =>
+        {
+            if (_allLoaded || _isLoading || _isLoadingMore) return;
+            if (e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight - 250)
+                LoadMoreProducts();
+        };
+    }
+
+    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match) return match;
+            var found = FindDescendant<T>(child);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// معرّفات المنتجات منخفضة المخزون (مخزون صفر أو وحدة تحت الحد الأدنى) — في SQL.
+    /// المجموعتان صغيرتان عادة لأنها تمثل المنتجات المشكلة فقط.
+    /// </summary>
+    private HashSet<int> ComputeLowStockIds()
+    {
+        var zeroStockIds = _db.InventoryBatches
+            .GroupBy(b => b.ProductId)
+            .Where(g => g.Sum(b => b.RemainingQuantity) <= 0)
+            .Select(g => g.Key);
+
+        var unitLowIds = _db.ProductUnits
+            .Where(u => u.MinStockLevel > 0)
+            .Select(u => new
+            {
+                u.ProductId,
+                Stock = _db.InventoryBatches.Where(b => b.ProductId == u.ProductId).Sum(b => b.RemainingQuantity),
+                u.QuantityPerParent,
+                u.MinStockLevel
+            })
+            .Where(x => (x.QuantityPerParent > 0 ? x.Stock / x.QuantityPerParent : x.Stock) <= x.MinStockLevel)
+            .Select(x => x.ProductId);
+
+        return zeroStockIds.Union(unitLowIds).ToHashSet();
     }
 
     private static bool IsLowStock(Product p, int totalPieces)
@@ -497,8 +687,8 @@ public partial class ProductsPage : Page
     {
         const string mask = "••••••";
         bool hidden = AmountsVisibilityService.IsHidden;
+        string selVisibility = _selectionMode ? "Visible" : "Collapsed";
 
-        var inv = new InventoryService(_db);
         var cards = new List<ProductCardItem>();
         foreach (var p in _allProducts!)
         {
@@ -506,7 +696,7 @@ public partial class ProductsPage : Page
             var data = _stockDataDict!.GetValueOrDefault(p.Id);
             var stockPieces = data.Total;
             var stockValue  = data.Value;
-            var stockDisplay = inv.GetStockDisplay(p);
+            var stockDisplay = InventoryService.GetStockDisplay(p.Units, stockPieces);
 
             var isLowStock = stockPieces <= 0;
             var (stockBg, stockFg) = isLowStock
@@ -519,23 +709,9 @@ public partial class ProductsPage : Page
                     ? ("منخفض", "#FFA726", "#4E342E", "Visible")
                     : ("", "", "", "Collapsed");
 
-            System.Windows.Media.ImageSource? imageSource = null;
-            if (!string.IsNullOrWhiteSpace(p.ImagePath) && File.Exists(p.ImagePath))
-            {
-                try
-                {
-                    var bitmap = new System.Windows.Media.Imaging.BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.UriSource = new Uri(p.ImagePath);
-                    bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                    bitmap.DecodePixelWidth = 84;
-                    bitmap.EndInit();
-                    imageSource = bitmap;
-                }
-                catch { }
-            }
+            var imageSource = ImageCacheService.Get(p.ImagePath);
 
-            cards.Add(new ProductCardItem
+            var card = new ProductCardItem
             {
                 Name = p.Name,
                 UnitsDisplay = string.Join(" → ", units.Select(u => u.Name)),
@@ -550,16 +726,35 @@ public partial class ProductsPage : Page
                 BadgeFg = badgeFg,
                 HasBadge = badgeVisibility,
                 ProductImage = imageSource,
-                HasImage = imageSource != null ? "Visible" : "Collapsed",
-                NoImage = imageSource == null ? "Visible" : "Collapsed",
+                IsFavorite = p.IsFavorite,
+                SelectionVisible = selVisibility,
                 Product = p,
-                SelectCommand = new RelayCommand(() => OpenUnitLevelsDialog(p)),
+                SelectCommand = new RelayCommand(() => CardClicked(p)),
                 AddStockCommand = new RelayCommand(() => OpenStockInForProduct(p)),
                 DeductStockCommand = new RelayCommand(() => OpenStockDeductionForProduct(p)),
                 HistoryCommand = new RelayCommand(() => OpenStockMovementForProduct(p)),
                 EditCommand = new RelayCommand(() => OpenEditDialog(p)),
                 DeleteCommand = new RelayCommand(() => DeleteProduct(p))
-            });
+            };
+            card.FavoriteCommand = new RelayCommand(() => ToggleFavorite(p, card));
+            cards.Add(card);
+
+            // تحميل الصورة من الخلفية عند أول ظهور فقط
+            if (imageSource == null && p.ImagePath != null && ImageCacheService.ExistsOnDisk(p.ImagePath))
+            {
+                var productId = p.Id;
+                var path = p.ImagePath;
+                _ = ImageCacheService.LoadAsync(path, 84).ContinueWith(t =>
+                {
+                    var img = t.Result;
+                    if (img == null) return;
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (card.Product.Id == productId)
+                            card.ProductImage = img;
+                    }));
+                }, System.Threading.Tasks.TaskScheduler.Default);
+            }
         }
 
         cards = _sortMode switch
@@ -567,9 +762,134 @@ public partial class ProductsPage : Page
             "stockAsc"  => cards.OrderBy(c => _stockDataDict!.GetValueOrDefault(c.Product.Id).Total).ToList(),
             "stockDesc" => cards.OrderByDescending(c => _stockDataDict!.GetValueOrDefault(c.Product.Id).Total).ToList(),
             "valueDesc" => cards.OrderByDescending(c => _stockDataDict!.GetValueOrDefault(c.Product.Id).Value).ToList(),
+            "fav"       => cards.OrderByDescending(c => c.IsFavorite).ThenBy(c => c.Name).ToList(),
             _           => cards.OrderBy(c => c.Name).ToList()
         };
         ProductsList.ItemsSource = cards;
+        UpdateBulkBar();
+    }
+
+    private void CardClicked(Product p)
+    {
+        if (_selectionMode)
+        {
+            var card = (ProductsList.ItemsSource as List<ProductCardItem>)?
+                .FirstOrDefault(c => c.Product.Id == p.Id);
+            if (card != null) card.IsSelected = !card.IsSelected;
+            UpdateBulkBar();
+        }
+        else
+        {
+            OpenUnitLevelsDialog(p);
+        }
+    }
+
+    private void ToggleFavorite(Product p, ProductCardItem card)
+    {
+        var tracked = _db.Products.Find(p.Id);
+        if (tracked == null) return;
+        tracked.IsFavorite = !tracked.IsFavorite;
+        _db.SaveChanges();
+        card.IsFavorite = tracked.IsFavorite;
+        p.IsFavorite = tracked.IsFavorite;
+
+        if (_sortMode == "fav")
+        {
+            // إعادة ترتيب فورية
+            var list = (ProductsList.ItemsSource as List<ProductCardItem>);
+            if (list != null)
+                ProductsList.ItemsSource = list
+                    .OrderByDescending(c => c.IsFavorite).ThenBy(c => c.Name).ToList();
+        }
+    }
+
+    // ═══════════ التحديد المتعدد ═══════════
+
+    private void ToggleSelectionMode_Click(object sender, RoutedEventArgs e)
+    {
+        _selectionMode = BtnSelectMode.IsChecked == true;
+        BulkBar.Visibility = _selectionMode ? Visibility.Visible : Visibility.Collapsed;
+
+        string selVisibility = _selectionMode ? "Visible" : "Collapsed";
+        var cards = ProductsList.ItemsSource as List<ProductCardItem>;
+        if (cards != null)
+        {
+            if (!_selectionMode)
+                foreach (var c in cards) c.IsSelected = false;
+            foreach (var c in cards) c.SelectionVisible = selVisibility;
+        }
+        UpdateBulkBar();
+    }
+
+    private void SelectAllCards_Click(object sender, RoutedEventArgs e)
+    {
+        var cards = ProductsList.ItemsSource as List<ProductCardItem>;
+        if (cards == null) return;
+        bool allSelected = cards.All(c => c.IsSelected);
+        foreach (var c in cards) c.IsSelected = !allSelected;
+        UpdateBulkBar();
+    }
+
+    private void DeleteSelected_Click(object sender, RoutedEventArgs e)
+    {
+        var cards = ProductsList.ItemsSource as List<ProductCardItem>;
+        var selected = cards?.Where(c => c.IsSelected).Select(c => c.Product).ToList();
+        if (selected == null || selected.Count == 0)
+        {
+            NotificationManager.ShowError("لم يتم تحديد أي منتجات");
+            return;
+        }
+
+        ConfirmDialog.Show("تأكيد الحذف الجماعي",
+            $"هل أنت متأكد من حذف {selected.Count} منتج؟\nسيتم حذف المخزون وحركاته نهائياً.",
+            result =>
+            {
+                if (!result) return;
+                foreach (var p in selected)
+                {
+                    _db.ProductUnits.RemoveRange(_db.ProductUnits.Where(u => u.ProductId == p.Id));
+                    _db.InventoryBatches.RemoveRange(_db.InventoryBatches.Where(b => b.ProductId == p.Id));
+                    _db.InventoryMovements.RemoveRange(_db.InventoryMovements.Where(m => m.ProductId == p.Id));
+                    var tracked = _db.Products.Find(p.Id);
+                    if (tracked != null) _db.Products.Remove(tracked);
+                }
+                _db.SaveChanges();
+                NotificationManager.ShowSuccess($"تم حذف {selected.Count} منتج");
+                if (_selectionMode)
+                {
+                    _selectionMode = false;
+                    BtnSelectMode.IsChecked = false;
+                    BulkBar.Visibility = Visibility.Collapsed;
+                }
+                LoadProducts();
+            }, ConfirmDialog.DialogType.Danger, confirmText: "نعم، حذف", requiredText: "حذف");
+    }
+
+    private void CancelSelection_Click(object sender, RoutedEventArgs e)
+    {
+        _selectionMode = false;
+        BtnSelectMode.IsChecked = false;
+        BulkBar.Visibility = Visibility.Collapsed;
+        var cards = ProductsList.ItemsSource as List<ProductCardItem>;
+        if (cards != null)
+        {
+            foreach (var c in cards)
+            {
+                c.IsSelected = false;
+                c.SelectionVisible = "Collapsed";
+            }
+        }
+        UpdateBulkBar();
+    }
+
+    private void UpdateBulkBar()
+    {
+        var cards = ProductsList.ItemsSource as List<ProductCardItem>;
+        int count = cards?.Count(c => c.IsSelected) ?? 0;
+        TxtBulkCount.Text = count.ToString();
+        BtnDeleteSelected.IsEnabled = count > 0;
+        bool allSelected = cards != null && cards.Count > 0 && cards.All(c => c.IsSelected);
+        BtnSelectAllText.Text = allSelected ? "إلغاء تحديد الكل" : "تحديد الكل";
     }
 
     private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -580,6 +900,19 @@ public partial class ProductsPage : Page
         _currentSearch = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
         _searchTimer.Stop();
         _searchTimer.Start();
+    }
+
+    private void OpenShortcuts()
+    {
+        var mainWindow = (MainWindow)Window.GetWindow(this);
+        var dialog = new ShortcutsDialog();
+        mainWindow.ShowOverlay(dialog);
+        dialog.DialogClosed += (s, r) => mainWindow.HideOverlay();
+    }
+
+    private void Help_Click(object sender, MouseButtonEventArgs e)
+    {
+        OpenShortcuts();
     }
 
     private void OpenUnitLevelsDialog(Product product)

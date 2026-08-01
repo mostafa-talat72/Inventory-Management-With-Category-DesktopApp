@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using Microsoft.EntityFrameworkCore;
 using ProductApp.Data;
 using ProductApp.Models;
 using ProductApp.Services;
@@ -43,6 +44,10 @@ public partial class StockInDialog : UserControl
     private readonly Dictionary<int, Brush?> _originalBrushes = new();
     private readonly ObservableCollection<CategoryChip> _chips = new();
     private List<CategoryChip> _allChips = new();
+    private readonly System.Windows.Threading.DispatcherTimer _searchTimer = new()
+    {
+        Interval = TimeSpan.FromMilliseconds(300)
+    };
 
     public StockInDialog()
     {
@@ -51,6 +56,11 @@ public partial class StockInDialog : UserControl
         _inv = new InventoryService(_db);
         SelectedItemsList.ItemsSource = _selectedEntries;
         CategoryChips.ItemsSource = _chips;
+        _searchTimer.Tick += (_, _) =>
+        {
+            _searchTimer.Stop();
+            LoadProductCards(TxtSearch.Text.Trim());
+        };
         LoadCategories();
         LoadProductCards();
         _loaded = true;
@@ -143,17 +153,24 @@ public partial class StockInDialog : UserControl
         }
 
         if (!string.IsNullOrWhiteSpace(search))
-            query = query.Where(p => p.Name.Contains(search));
+            query = query.Where(p => p.Name.Contains(search) || (p.Barcode != null && p.Barcode.Contains(search)));
 
-        _allProducts = query.ToList();
-        var cardItems = _allProducts.Select(p =>
+        var products = query.Include(p => p.Units).ToList();
+        _allProducts = products;
+
+        var totals = _db.InventoryBatches
+            .GroupBy(b => b.ProductId)
+            .Select(g => new { ProductId = g.Key, Total = g.Sum(b => b.RemainingQuantity) })
+            .ToDictionary(x => x.ProductId, x => x.Total);
+
+        var cardItems = products.Select(p =>
         {
-            var units = _db.ProductUnits.Where(u => u.ProductId == p.Id).OrderBy(u => u.UnitType).ToList();
+            var units = p.Units.OrderBy(u => u.UnitType).ToList();
             return new
             {
                 p.Name,
                 UnitsDisplay = string.Join(" → ", units.Select(u => u.Name)),
-                StockDisplay = _inv.GetStockDisplay(p),
+                StockDisplay = InventoryService.GetStockDisplay(p.Units, totals.GetValueOrDefault(p.Id)),
                 SelectCommand = new StockInRelayCommand(() => AddProduct(p))
             };
         }).ToList();
@@ -283,7 +300,22 @@ public partial class StockInDialog : UserControl
         if (!_loaded) return;
         var text = TxtSearch.Text;
         if (text == ProductApp.Converters.WatermarkBehavior.GetWatermark(TxtSearch)) return;
-        LoadProductCards(string.IsNullOrWhiteSpace(text) ? null : text.Trim());
+        _searchTimer.Stop();
+        _searchTimer.Start();
+    }
+
+    private void TxtSearch_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        _searchTimer.Stop();
+        var text = TxtSearch.Text.Trim();
+        if (text.Length == 0) return;
+        var match = _db.Products.FirstOrDefault(p => p.Barcode == text || p.Name == text);
+        if (match != null)
+        {
+            AddProduct(match);
+            e.Handled = true;
+        }
     }
 
     private async void BtnSave_Click(object sender, RoutedEventArgs e)

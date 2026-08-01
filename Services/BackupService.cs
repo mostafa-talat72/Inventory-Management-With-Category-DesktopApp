@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Threading;
 
 namespace ProductApp.Services;
@@ -83,7 +84,7 @@ public class BackupService
         };
         _timer.Tick += (_, _) =>
         {
-            try { CreateBackup(); }
+            try { Task.Run(() => CreateBackup()); }
             catch { }
         };
         _timer.Start();
@@ -99,7 +100,7 @@ public class BackupService
     {
         if (_config.BackupOnOperation)
         {
-            try { CreateBackup(); }
+            try { Task.Run(() => CreateBackup()); }
             catch { }
         }
     }
@@ -108,7 +109,7 @@ public class BackupService
     {
         if (_config.BackupOnStartup)
         {
-            try { CreateBackup(); }
+            try { Task.Run(() => CreateBackup()); }
             catch { }
         }
     }

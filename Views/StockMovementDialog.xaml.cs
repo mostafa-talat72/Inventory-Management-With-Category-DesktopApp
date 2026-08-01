@@ -169,6 +169,39 @@ public partial class StockMovementDialog : UserControl
         EmptyState.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    private void ExportExcel_Click(object sender, RoutedEventArgs e)
+    {
+        if (MovementGrid.ItemsSource is not List<MovementItem> items || items.Count == 0)
+        {
+            MessageBox.Show("لا توجد حركات للتصدير.", "تصدير", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var saveDialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Filter = "Excel Files (*.xlsx)|*.xlsx",
+            FileName = $"حركة_مخزون_{_product.Name}_{DateTime.Now:yyyyMMdd}.xlsx"
+        };
+        if (saveDialog.ShowDialog() != true) return;
+
+        try
+        {
+            string[] headers = { "التاريخ", "النوع", "الكمية", "سعر الوحدة", "الإجمالي", "السبب / المرجع", "المخزون بعد" };
+            var rows = items.Select(i => new object?[]
+            {
+                i.DateDisplay, i.TypeDisplay, i.QuantityDisplay,
+                i.UnitPriceDisplay, i.TotalDisplay, i.ReasonDisplay, i.StockAfterDisplay
+            }).ToList();
+
+            ExcelExportService.Export(saveDialog.FileName, headers, rows);
+            NotificationManager.ShowSuccess("تم تصدير حركة المخزون إلى Excel بنجاح");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"حدث خطأ أثناء التصدير:\n{ex.Message}", "تصدير", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void EditMovement_Click(object sender, RoutedEventArgs e)
     {
         if (((FrameworkElement)sender).DataContext is not MovementItem item) return;

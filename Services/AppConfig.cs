@@ -28,6 +28,11 @@ public class AppConfig
     public bool IsDarkMode { get; set; } = false;
     public bool HideAmounts { get; set; } = true;
 
+    // تفضيلات شاشة المنتجات
+    public string ProductsSortMode { get; set; } = "name";
+    public bool ProductsLowStockOnly { get; set; }
+    public int? ProductsSelectedCategoryId { get; set; }
+
     private static readonly string DefaultPassword = "123456";
 
     public static AppConfig Load()
